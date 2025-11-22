@@ -407,8 +407,8 @@ export function PizzaDetailsPanel({
   );
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/50">
-      <div className="bg-slate-900 w-full sm:max-w-lg sm:rounded-2xl sm:shadow-xl border-t sm:border border-slate-800 max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/50 px-2">
+      <div className="bg-slate-900 w-full max-w-md sm:max-w-lg rounded-t-2xl sm:rounded-2xl sm:shadow-xl border-t sm:border border-slate-800 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
           <h2 className="text-sm font-semibold text-slate-100">
             Dettagli pizza
@@ -662,6 +662,7 @@ export function PizzaDetailsPanel({
         </div>
 
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-slate-800">
+          
           <button
             type="button"
             onClick={onClose}
