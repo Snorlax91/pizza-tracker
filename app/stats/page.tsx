@@ -516,7 +516,7 @@ export default function GlobalStatsPage() {
                                             return (
                                                 <div
                                                     key={idx}
-                                                    className="flex-1 flex flex-col items-center justify-end"
+                                                    className="flex-1 flex flex-col items-center justify-end h-full"
                                                 >
                                                     <div
                                                         className="w-full rounded-t-md bg-amber-400"
@@ -601,7 +601,7 @@ export default function GlobalStatsPage() {
                                                 const color = colors[idx % colors.length];
                                                 return (
                                                     <div
-                                                        key={item.label} // ✅ USIAMO LA LABEL COME KEY
+                                                        key={item.label} 
                                                         className="flex items-center justify-between gap-2"
                                                     >
                                                         <div className="flex items-center gap-2">
@@ -647,7 +647,7 @@ export default function GlobalStatsPage() {
                                         return (
                                             <div
                                                 key={point.week}
-                                                className="flex-1 flex flex-col items-center justify-end"
+                                                className="flex-1 flex flex-col items-center justify-end h-full"
                                             >
                                                 <div
                                                     className="w-full rounded-t-md bg-slate-300"

@@ -635,7 +635,7 @@ export default function ProfilePage() {
                         return (
                           <div
                             key={idx}
-                            className="flex-1 flex flex-col items-center justify-end"
+                            className="flex-1 flex flex-col items-center justify-end h-full"
                           >
                             <div
                               className="w-full rounded-t-md bg-amber-400"
@@ -679,7 +679,7 @@ export default function ProfilePage() {
                         return (
                           <div
                             key={idx}
-                            className="flex-1 flex flex-col items-center justify-end"
+                            className="flex-1 flex flex-col items-center justify-end h-full"
                           >
                             <div
                               className="w-full rounded-t-md bg-slate-300"
