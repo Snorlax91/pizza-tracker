@@ -506,10 +506,12 @@ export default function GlobalStatsPage() {
                                 ) : (
                                     <div className="flex items-end gap-2 h-32">
                                         {weekdaySeries.map((count, idx) => {
-                                            const height =
-                                                weekdayMax > 0
-                                                    ? Math.max(8, (count / weekdayMax) * 100)
-                                                    : 0;
+                                            let heightPercent = 0;
+                                                if (weekdayMax > 0 && count > 0) {
+                                                    const ratio = count / weekdayMax; // 0–1
+                                                    // min 20%, max 100% se non zero
+                                                    heightPercent = 20 + ratio * 80;
+                                                }
                                             const labels = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
                                             return (
                                                 <div
@@ -518,7 +520,7 @@ export default function GlobalStatsPage() {
                                                 >
                                                     <div
                                                         className="w-full rounded-t-md bg-amber-400"
-                                                        style={{ height: `${height}%` }}
+                                                        style={{ height: `${heightPercent}%` }}
                                                     ></div>
                                                     <span className="text-[9px] mt-1 text-slate-400">
                                                         {labels[idx]}
