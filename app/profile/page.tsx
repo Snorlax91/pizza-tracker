@@ -740,6 +740,10 @@ export default function ProfilePage() {
                                                         <span className="text-[9px] mt-1 text-slate-400">
                                                             {labels[idx]}
                                                         </span>
+                                                        {/* tooltip "custom" sopra la barra (hover/tap) */}
+                                                        <div className="pointer-events-none absolute -top-6 px-2 py-1 rounded bg-slate-900 text-[10px] text-slate-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            {count} pizze
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
@@ -784,6 +788,10 @@ export default function ProfilePage() {
                                                         <span className="text-[9px] mt-1 text-slate-400">
                                                             {labels[idx]}
                                                         </span>
+                                                        {/* tooltip "custom" sopra la barra (hover/tap) */}
+                                                        <div className="pointer-events-none absolute -top-6 px-2 py-1 rounded bg-slate-900 text-[10px] text-slate-100 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            {count} pizze
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
