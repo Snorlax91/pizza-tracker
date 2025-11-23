@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Power Pizza Tracker",
   description: "Track your pizza orders with ease",
+  icons: {
+    icon: '/icon.png',
+  },
 };
 
 export default function RootLayout({
