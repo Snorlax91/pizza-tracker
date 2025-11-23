@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { AppHeader } from '@/components/AppHeader';
@@ -14,11 +14,18 @@ type Profile = {
 
 type PizzaRow = {
   id: number;
+  name: string | null;
   eaten_at: string | null;
   rating: number | null;
   origin: string | null;
   photo_url: string | null;
   notes: string | null;
+  pizza_ingredients: {
+    ingredients: {
+      id: number;
+      name: string;
+    } | null;
+  }[];
 };
 
 type GlobalRank = {
@@ -48,6 +55,7 @@ const MONTH_LABELS = [
   'Novembre',
   'Dicembre',
 ];
+
 const ORIGIN_LABELS = {
   takeaway: 'Da asporto',
   frozen: 'Surgelata',
@@ -59,9 +67,71 @@ const ORIGIN_LABELS = {
 
 type PizzaOrigin = keyof typeof ORIGIN_LABELS;
 
-
 const CURRENT_YEAR = new Date().getFullYear();
 const PAGE_SIZE = 10;
+
+// Emoji per ingredienti
+const INGREDIENT_EMOJI_MAP: Record<string, string> = {
+  // classici
+  cipolla: '🧅',
+  cipolle: '🧅',
+  salame: '🍖',
+  'salame piccante': '🌶️',
+  'salamino piccante': '🌶️',
+  salsiccia: '🥩',
+  wurstel: '🌭',
+  'wurstel di pollo': '🌭',
+  prosciutto: '🥓',
+  'prosciutto cotto': '🥓',
+  'prosciutto crudo': '🥓',
+  speck: '🥓',
+
+  // verdure
+  funghi: '🍄',
+  carciofi: '🫒',
+  carciofo: '🫒',
+  zucchine: '🥒',
+  zucchina: '🥒',
+  melanzane: '🍆',
+  melanzana: '🍆',
+  peperoni: '🫑',
+  peperone: '🫑',
+  rucola: '🥬',
+  insalata: '🥬',
+  basilico: '🌿',
+
+  // mare
+  tonno: '🐟',
+  acciughe: '🐟',
+  acciuga: '🐟',
+  gamberi: '🦐',
+
+  // extra
+  olive: '🫒',
+  'olive nere': '🫒',
+  'olive verdi': '🫒',
+  mais: '🌽',
+  ananas: '🍍',
+  gorgonzola: '🧀',
+  'mozzarella di bufala': '🧀',
+  bufala: '🧀',
+
+  // patate
+  'patatine fritte': '🍟',
+  'patate fritte': '🍟',
+  patate: '🥔',
+  'patate al forno': '🥔',
+  'patate arrosto': '🥔',
+};
+
+function getIngredientEmoji(name?: string | null): string {
+  if (!name) return '🍕';
+  let n = name.toLowerCase().trim();
+  n = n
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, ''); // rimuove accenti
+  return INGREDIENT_EMOJI_MAP[n] ?? '🍕';
+}
 
 export default function UserPizzasPage() {
   const router = useRouter();
@@ -349,7 +419,7 @@ export default function UserPizzasPage() {
     loadHighlights();
   }, [profile]);
 
-  // carico pizze paginated per questo utente
+  // carico pizze paginated per questo utente (con ingredienti)
   const loadPizzasPage = async (page: number) => {
     if (!profile) return;
     setPizzasLoading(true);
@@ -361,7 +431,23 @@ export default function UserPizzasPage() {
 
       const { data, error } = await supabase
         .from('pizzas')
-        .select('id, eaten_at, rating, origin, photo_url, notes')
+        .select(
+          `
+          id,
+          name,
+          eaten_at,
+          rating,
+          origin,
+          photo_url,
+          notes,
+          pizza_ingredients (
+            ingredients (
+              id,
+              name
+            )
+          )
+        `
+        )
         .eq('user_id', profile.id)
         .order('eaten_at', { ascending: false })
         .range(from, to);
@@ -371,12 +457,22 @@ export default function UserPizzasPage() {
       const rows: PizzaRow[] =
         (data ?? []).map((row: any) => ({
           id: row.id as number,
+          name: row.name ?? null,
           eaten_at: row.eaten_at ?? null,
           rating:
             typeof row.rating === 'number' ? (row.rating as number) : null,
           origin: row.origin ?? null,
           photo_url: row.photo_url ?? null,
           notes: row.notes ?? null,
+          pizza_ingredients:
+            (row.pizza_ingredients as any[])?.map((pi: any) => ({
+              ingredients: pi.ingredients
+                ? {
+                    id: pi.ingredients.id as number,
+                    name: pi.ingredients.name as string,
+                  }
+                : null,
+            })) ?? [],
         })) ?? [];
 
       if (page === 0) {
@@ -602,49 +698,95 @@ export default function UserPizzasPage() {
             </p>
           ) : (
             <div className="space-y-3">
-              {pizzas.map(p => (
-                <div
-                  key={p.id}
-                  className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 flex flex-col gap-2"
-                >
-                  <div className="flex justify-between gap-2 text-xs">
-                    <span className="text-slate-200">
-                      {p.eaten_at
-                        ? new Date(p.eaten_at).toLocaleDateString()
-                        : 'Data sconosciuta'}
-                    </span>
-                    {p.rating !== null && (
-                      <span className="text-amber-300">
-                        ⭐ {p.rating.toFixed(1).replace('.', ',')}
+              {pizzas.map(p => {
+                // ingredienti filtrati validi
+                const ingredients =
+                  p.pizza_ingredients
+                    ?.map(pi => pi.ingredients)
+                    .filter((ing): ing is { id: number; name: string } => !!ing) ??
+                  [];
+
+                return (
+                  <div
+                    key={p.id}
+                    className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 flex flex-col gap-2"
+                  >
+                    {/* intestazione: data + nome + rating */}
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-slate-200">
+                          {p.eaten_at
+                            ? new Date(p.eaten_at).toLocaleDateString()
+                            : 'Data sconosciuta'}
+                        </span>
+                        <span className="text-[11px] text-slate-300 font-semibold">
+                          {p.name && p.name.trim() !== ''
+                            ? p.name
+                            : 'Pizza'}
+                        </span>
+                      </div>
+                      {p.rating !== null && (
+                        <span className="text-amber-300">
+                          ⭐ {p.rating.toFixed(1).replace('.', ',')}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* provenienza */}
+                    {p.origin && (
+                      <span className="text-[11px] text-slate-400">
+                        Provenienza:{' '}
+                        {
+                          ORIGIN_LABELS[
+                            (p.origin ?? 'other') as PizzaOrigin
+                          ]
+                        }
                       </span>
                     )}
+
+                    {/* note */}
+                    {p.notes && (
+                      <p className="text-[11px] text-slate-300">
+                        {p.notes}
+                      </p>
+                    )}
+
+                    {/* ingredienti */}
+                    {ingredients.length > 0 && (
+                      <div className="mt-1">
+                        <p className="text-[11px] text-slate-400 mb-1">
+                          Ingredienti:
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {ingredients.map(ing => (
+                            <Link
+                              key={ing.id}
+                              href={`/ingredients/${ing.id}`}
+                              className="px-2 py-1 rounded-full bg-slate-900 border border-slate-700 text-[11px] flex items-center gap-1 hover:border-amber-400 hover:text-amber-200"
+                            >
+                              <span className="text-sm">
+                                {getIngredientEmoji(ing.name)}
+                              </span>
+                              <span>{ing.name}</span>
+                            </Link>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* foto */}
+                    {p.photo_url && (
+                      <div className="mt-2 w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-900">
+                        <img
+                          src={p.photo_url}
+                          alt="Foto pizza"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
                   </div>
-
-                  {p.origin && (
-                    <span className="text-[11px] text-slate-400">
-                      Provenienza:{' '}
-                     {ORIGIN_LABELS[(p.origin ?? 'other') as PizzaOrigin]}
-
-                    </span>
-                  )}
-
-                  {p.notes && (
-                    <p className="text-[11px] text-slate-300">
-                      {p.notes}
-                    </p>
-                  )}
-
-                  {p.photo_url && (
-                    <div className="mt-1 w-full aspect-[4/3] rounded-xl overflow-hidden bg-slate-900">
-                      <img
-                        src={p.photo_url}
-                        alt="Foto pizza"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
