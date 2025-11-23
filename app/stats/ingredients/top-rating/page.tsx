@@ -216,11 +216,10 @@ export default function TopIngredientsByCountPage() {
             <div className="flex-1 px-4 py-4 max-w-4xl mx-auto w-full flex flex-col gap-4">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-sm font-semibold">
-                        Classifica globale ingredienti – numero di pizze
+                        Classifica ingredienti – voto medio
                     </h1>
                     <p className="text-[11px] text-slate-400">
-                        Ingredienti ordinati per numero di pizze in cui compaiono nel
-                        periodo selezionato ({periodLabel}).
+                        Ingredienti ordinati per voto medio delle pizze in cui compaiono, limitatamente al periodo selezionato ({periodLabel}). Sono inclusi solo ingredienti presenti in almeno cinque pizze.
                     </p>
                 </div>
 

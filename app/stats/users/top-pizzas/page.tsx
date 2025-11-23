@@ -322,8 +322,7 @@ export default function TopPizzasUsersPage() {
             Classifica globale utenti – numero di pizze
           </h1>
           <p className="text-[11px] text-slate-400">
-            Vedi la classifica completa degli utenti per numero di pizze
-            registrate nel periodo selezionato ({periodLabel}).
+            Utenti ordinati per numero di pizze registrate nel periodo selezionato ({periodLabel}).
           </p>
         </div>
 

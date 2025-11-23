@@ -354,11 +354,10 @@ export default function TopPizzasUsersPage() {
             <div className="flex-1 px-4 py-4 max-w-4xl mx-auto w-full flex flex-col gap-4">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-sm font-semibold">
-                        Classifica globale utenti – numero di pizze
+                        Classifica utenti – ingredienti distinti per pizza
                     </h1>
                     <p className="text-[11px] text-slate-400">
-                        Vedi la classifica completa degli utenti per numero di pizze
-                        registrate nel periodo selezionato ({periodLabel}).
+                        Utenti ordinati per media di ingredienti distinti per pizza nel periodo selezionato ({periodLabel}). Solo utenti con almeno tre pizze vengono inclusi.
                     </p>
                 </div>
 
