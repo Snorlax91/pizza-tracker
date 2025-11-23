@@ -32,6 +32,16 @@ type Highlight = {
   rank: number;
 };
 
+type RankingEntry = {
+  type: 'year2025' | 'currentMonth' | 'weekday' | 'ingredient' | 'bestIngredient';
+  label: string;
+  rank: number;
+  totalUsers: number;
+  count?: number;
+  ingredientId?: number;
+  ingredientName?: string;
+};
+
 type IngredientMomentHighlight = {
   ingredientId: number;
   name: string;
@@ -255,6 +265,7 @@ export default function Home() {
   const [yearRank, setYearRank] = useState<GlobalRank | null>(null);
   const [monthRank, setMonthRank] = useState<GlobalRank | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
   const [undoLoading, setUndoLoading] = useState(false);
 
@@ -531,6 +542,226 @@ export default function Home() {
         }
 
         setHighlights(newHighlights);
+
+        // ========== LOGICA RANKING COMPLETA (come nel profilo) ==========
+        const newRankings: RankingEntry[] = [];
+
+        // 1. RANK GLOBALE PER IL 2025 (sempre mostrato)
+        if (y === 2025) {
+          if (yearRankObj.rank && yearRankObj.totalUsers > 0) {
+            newRankings.push({
+              type: 'year2025',
+              label: 'Pizze mangiate nel 2025',
+              rank: yearRankObj.rank,
+              totalUsers: yearRankObj.totalUsers,
+              count: yearRankObj.count,
+            });
+          }
+        } else {
+          // Se non siamo nel 2025, calcola comunque il rank per il 2025
+          try {
+            const { data: pizzas2025, error: error2025 } = await supabase
+              .from('pizzas')
+              .select('user_id')
+              .gte('eaten_at', '2025-01-01')
+              .lte('eaten_at', '2025-12-31');
+
+            if (!error2025 && pizzas2025) {
+              const counts: Record<string, number> = {};
+              pizzas2025.forEach(row => {
+                counts[row.user_id] = (counts[row.user_id] || 0) + 1;
+              });
+
+              const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+              const totalUsers = entries.length;
+              const myIndex = entries.findIndex(([id]) => id === uid);
+              const myCount = counts[uid] || 0;
+
+              if (myIndex !== -1) {
+                newRankings.push({
+                  type: 'year2025',
+                  label: 'Pizze mangiate nel 2025',
+                  rank: myIndex + 1,
+                  totalUsers,
+                  count: myCount,
+                });
+              }
+            }
+          } catch (e) {
+            console.warn('Impossibile calcolare rank 2025', e);
+          }
+        }
+
+        // 2. RANK GLOBALE PER IL MESE CORRENTE (sempre mostrato)
+        if (monthRankObj.rank && monthRankObj.totalUsers > 0) {
+          const monthNames = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno',
+            'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+          newRankings.push({
+            type: 'currentMonth',
+            label: `Pizze mangiate a ${monthNames[m - 1]} ${y}`,
+            rank: monthRankObj.rank,
+            totalUsers: monthRankObj.totalUsers,
+            count: monthRankObj.count,
+          });
+        }
+
+        // 3. TOP 10 PER GIORNI DELLA SETTIMANA
+        try {
+          const weekdayNames = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+
+          const { data: allPizzasYear, error: errorYear } = await supabase
+            .from('pizzas')
+            .select('user_id, eaten_at')
+            .gte('eaten_at', startYear)
+            .lte('eaten_at', endYear);
+
+          if (!errorYear && allPizzasYear) {
+            const weekdayCounts: Record<number, Record<string, number>> = {};
+            for (let i = 0; i < 7; i++) {
+              weekdayCounts[i] = {};
+            }
+
+            allPizzasYear.forEach(row => {
+              if (!row.eaten_at) return;
+              const d = new Date(row.eaten_at);
+              if (Number.isNaN(d.getTime())) return;
+              const weekday = d.getDay();
+              weekdayCounts[weekday][row.user_id] = (weekdayCounts[weekday][row.user_id] || 0) + 1;
+            });
+
+            for (let weekday = 0; weekday < 7; weekday++) {
+              const counts = weekdayCounts[weekday];
+              const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+              const myIndex = entries.findIndex(([id]) => id === uid);
+              const myCount = counts[uid] || 0;
+
+              if (myIndex !== -1 && myIndex < 10 && myCount > 0) {
+                newRankings.push({
+                  type: 'weekday',
+                  label: `Pizze mangiate di ${weekdayNames[weekday]}`,
+                  rank: myIndex + 1,
+                  totalUsers: entries.length,
+                  count: myCount,
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Impossibile calcolare rank per weekday', e);
+        }
+
+        // 4. TOP 10 PER INGREDIENTI + 5. MIGLIOR INGREDIENTE
+        try {
+          // Ottieni le pizze dell'utente nell'anno corrente con ingredienti
+          const { data: userYearPizzasData, error: userYearError } = await supabase
+            .from('pizzas')
+            .select(`
+              id,
+              pizza_ingredients (
+                ingredients (
+                  id,
+                  name
+                )
+              )
+            `)
+            .eq('user_id', uid)
+            .gte('eaten_at', startYear)
+            .lte('eaten_at', endYear);
+
+          if (userYearError) throw userYearError;
+
+          const freq: Record<number, { name: string; count: number }> = {};
+          (userYearPizzasData ?? []).forEach((p: any) => {
+            (p.pizza_ingredients ?? []).forEach((pi: any) => {
+              const ing = pi.ingredients;
+              if (!ing) return;
+              const id = ing.id as number;
+              if (!freq[id]) {
+                freq[id] = { name: ing.name, count: 0 };
+              }
+              freq[id].count += 1;
+            });
+          });
+
+          const ingredientRankings: Array<{
+            ingredientId: number;
+            ingredientName: string;
+            rank: number;
+            totalUsers: number;
+            count: number;
+          }> = [];
+
+          for (const [ingredientId, { name, count }] of Object.entries(freq)) {
+            const { data: allPi, error: allPiError } = await supabase
+              .from('pizza_ingredients')
+              .select(`
+                pizza_id,
+                ingredient_id,
+                pizzas!inner (
+                  user_id,
+                  eaten_at
+                )
+              `)
+              .eq('ingredient_id', Number(ingredientId))
+              .gte('pizzas.eaten_at', startYear)
+              .lte('pizzas.eaten_at', endYear);
+
+            if (allPiError || !allPi) continue;
+
+            const byUser: Record<string, number> = {};
+            allPi.forEach((row: any) => {
+              const uid2 = row.pizzas.user_id as string;
+              byUser[uid2] = (byUser[uid2] || 0) + 1;
+            });
+
+            const entries = Object.entries(byUser).sort((a, b) => b[1] - a[1]);
+            const totalUsers = entries.length;
+            const myIndex = entries.findIndex(([id]) => id === uid);
+
+            if (myIndex !== -1) {
+              ingredientRankings.push({
+                ingredientId: Number(ingredientId),
+                ingredientName: name,
+                rank: myIndex + 1,
+                totalUsers,
+                count,
+              });
+            }
+          }
+
+          ingredientRankings.sort((a, b) => a.rank - b.rank);
+
+          const top10Ingredients = ingredientRankings.filter(r => r.rank <= 10);
+          top10Ingredients.forEach(r => {
+            newRankings.push({
+              type: 'ingredient',
+              label: `Uso dell'ingrediente`,
+              rank: r.rank,
+              totalUsers: r.totalUsers,
+              count: r.count,
+              ingredientId: r.ingredientId,
+              ingredientName: r.ingredientName,
+            });
+          });
+
+          if (top10Ingredients.length === 0 && ingredientRankings.length > 0) {
+            const best = ingredientRankings[0];
+            newRankings.push({
+              type: 'bestIngredient',
+              label: `Miglior posizione per ingrediente`,
+              rank: best.rank,
+              totalUsers: best.totalUsers,
+              count: best.count,
+              ingredientId: best.ingredientId,
+              ingredientName: best.ingredientName,
+            });
+          }
+        } catch (e) {
+          console.warn('Impossibile calcolare rank per ingredienti', e);
+        }
+
+        setRankings(newRankings);
+
       } catch (err) {
         console.error(err);
         // non blocchiamo la home per errori di highlight
@@ -833,120 +1064,79 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       <AppHeader displayName={displayName} />
-      {/* Barra highlight profilo */}
+      {/* Barra ranking */}
       <section className="px-4 py-3 border-b border-slate-800 bg-slate-900/80">
-        {loadingHighlights ? (
-          <p className="text-xs text-slate-400">
-            Carico le tue statistiche globali...
-          </p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {/* Posizione mese/anno */}
-            <div className="flex flex-wrap gap-2 text-xs">
-              {/* ANNO */}
-              <div className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2">
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${yearRank?.rank === 1
-                      ? 'bg-yellow-400 text-slate-900'
-                      : yearRank?.rank === 2
-                        ? 'bg-slate-300 text-slate-900'
-                        : yearRank?.rank === 3
-                          ? 'bg-amber-700 text-slate-50'
-                          : 'bg-slate-700 text-slate-100'
-                    }`}
-                >
-                  {yearRank?.rank ? `#${yearRank.rank}` : 'N/D'}
-                </span>
-                <div className="flex flex-col">
-                  <span className="text-slate-200">
-                    {yearRank?.rank && yearRank.totalUsers > 0 ? (
-                      <>Posizione globale {new Date().getFullYear()}</>
-                    ) : (
-                      <>Ancora nessuna pizza registrata quest&apos;anno</>
-                    )}
-                  </span>
-                  {yearRank?.rank && yearRank.totalUsers > 0 && (
-                    <span className="text-[10px] text-slate-400">
-                      {yearRank.count} pizze • su {yearRank.totalUsers} utenti
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* MESE */}
-              <div className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2">
-                <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${monthRank?.rank === 1
-                      ? 'bg-yellow-400 text-slate-900'
-                      : monthRank?.rank === 2
-                        ? 'bg-slate-300 text-slate-900'
-                        : monthRank?.rank === 3
-                          ? 'bg-amber-700 text-slate-50'
-                          : 'bg-slate-700 text-slate-100'
-                    }`}
-                >
-                  {monthRank?.rank ? `#${monthRank.rank}` : 'N/D'}
-                </span>
-                <div className="flex flex-col">
-                  <span className="text-slate-200">
-                    {monthRank?.rank && monthRank.totalUsers > 0 ? (
-                      <>
-                        Posizione globale{' '}
-                        {MONTH_LABELS[new Date().getMonth()]}
-                      </>
-                    ) : (
-                      <>Ancora nessuna pizza registrata questo mese</>
-                    )}
-                  </span>
-                  {monthRank?.rank && monthRank.totalUsers > 0 && (
-                    <span className="text-[10px] text-slate-400">
-                      {monthRank.count} pizze • su {monthRank.totalUsers} utenti
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Highlight speciali (Top 10 ecc.) */}
-            {highlights.length > 0 && (
-              <div className="flex flex-wrap gap-2 text-[11px]">
-                {highlights.map(h => (
+        <div className="max-w-6xl mx-auto">
+          {loadingHighlights ? (
+            <p className="text-xs text-slate-400">
+              Carico le tue statistiche globali...
+            </p>
+          ) : rankings.length === 0 ? (
+            <p className="text-xs text-slate-400">
+              Nessun posizionamento disponibile al momento. Inizia a registrare le tue pizze!
+            </p>
+          ) : (
+            <div className="space-y-2 text-[11px] text-slate-300">
+              {rankings.map((ranking, idx) => {
+                const showIngredientLink = ranking.type === 'ingredient' || ranking.type === 'bestIngredient';
+                
+                return (
                   <div
-                    key={h.id}
-                    className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-slate-800/80 border-slate-700"
+                    key={idx}
+                    className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2"
                   >
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${h.rank === 1
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${
+                        ranking.rank === 1
                           ? 'bg-yellow-400 text-slate-900'
-                          : h.rank === 2
-                            ? 'bg-slate-300 text-slate-900'
-                            : h.rank === 3
-                              ? 'bg-amber-700 text-slate-50'
-                              : 'bg-slate-700 text-slate-100'
-                        }`}
+                          : ranking.rank === 2
+                          ? 'bg-slate-300 text-slate-900'
+                          : ranking.rank === 3
+                          ? 'bg-amber-700 text-slate-50'
+                          : 'bg-slate-700 text-slate-100'
+                      }`}
                     >
-                      {h.rank === 1
+                      {ranking.rank === 1
                         ? '🥇'
-                        : h.rank === 2
-                          ? '🥈'
-                          : h.rank === 3
-                            ? '🥉'
-                            : `#${h.rank}`}
+                        : ranking.rank === 2
+                        ? '🥈'
+                        : ranking.rank === 3
+                        ? '🥉'
+                        : `#${ranking.rank}`}
                     </span>
-                    <div className="flex flex-col">
-                      <span className="text-slate-50 font-semibold">
-                        {h.label}
+                    <div className="flex-1 flex flex-wrap items-baseline gap-1 min-w-0">
+                      <span className="text-slate-200">
+                        {ranking.label}
+                        {showIngredientLink && ranking.ingredientName && ranking.ingredientId && (
+                          <>
+                            {' '}
+                            <Link 
+                              href={`/stats/ingredients/${ranking.ingredientId}`}
+                              className="font-semibold text-amber-400 hover:text-amber-300 underline"
+                            >
+                              {ranking.ingredientName}
+                            </Link>
+                          </>
+                        )}
+                        {!showIngredientLink && ':'}
+                        {' '}sei{' '}
+                        <span className="font-bold text-amber-400">
+                          #{ranking.rank}
+                        </span>
+                        {' '}su {ranking.totalUsers} utenti
                       </span>
-                      <span className="text-[10px] text-slate-400">
-                        {h.description}
-                      </span>
+                      {ranking.count !== undefined && (
+                        <span className="text-[10px] text-slate-400">
+                          • {ranking.count} {ranking.count === 1 ? 'pizza' : 'pizze'}
+                        </span>
+                      )}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Contenuto centrale con 3 colonne su desktop */}
