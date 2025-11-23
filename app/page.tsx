@@ -140,66 +140,36 @@ function useYearlyPizzaStats(userId?: string) {
   };
 }
 
-function IngredientHighlightsBox({ data }: { data: IngredientMoments }) {
-  const hasAny =
-    data.prevMonth || data.currentMonth || data.prevWeek || data.currentWeek;
-
-  return (
-    <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 flex flex-col gap-2">
-      <h2 className="text-xs font-semibold text-slate-100">
-        Ingredienti del momento
-      </h2>
-      {hasAny ? (
-        <div className="grid grid-cols-1 gap-2 text-[11px]">
-          <IngredientHighlightRow
-            label="Mese scorso"
-            highlight={data.prevMonth}
-          />
-          <IngredientHighlightRow
-            label="Mese corrente"
-            highlight={data.currentMonth}
-          />
-          <IngredientHighlightRow
-            label="Settimana scorsa"
-            highlight={data.prevWeek}
-          />
-          <IngredientHighlightRow
-            label="Settimana corrente"
-            highlight={data.currentWeek}
-          />
-        </div>
-      ) : (
-        <p className="text-[11px] text-slate-500">
-          Ancora nessun ingrediente “preferito” recente.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function IngredientHighlightRow({
-  label,
+function IngredientStatCard({
+  title,
+  subtitle,
   highlight,
 }: {
-  label: string;
+  title: string;
+  subtitle: string;
   highlight: IngredientMomentHighlight | null;
 }) {
   return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-slate-400">{label}</span>
+    <div className="bg-slate-800/80 border border-slate-700 rounded-2xl p-3 flex flex-col gap-1 text-xs">
+      <span className="text-[10px] uppercase tracking-wide text-slate-400">
+        {title}
+      </span>
+      <span className="text-[11px] text-slate-500">{subtitle}</span>
       {highlight ? (
-        <div className="flex items-center gap-2">
-          {/* In futuro qui possiamo aggiungere un’emoji in base all’ingrediente */}
-          <span className="text-slate-100 font-medium">
+        <div className="mt-2 flex items-baseline justify-between gap-2">
+          <Link
+            href={`/ingredients/${highlight.ingredientId}`}
+            className="text-sm font-semibold text-slate-50 hover:underline"
+          >
             {highlight.name}
-          </span>
-          <span className="text-[10px] text-slate-500">
+          </Link>
+          <span className="text-[11px] text-slate-400">
             {highlight.count} pizze
           </span>
         </div>
       ) : (
-        <span className="text-[10px] text-slate-500">
-          Nessun dato
+        <span className="mt-2 text-[11px] text-slate-500">
+          Nessun dato disponibile.
         </span>
       )}
     </div>
@@ -784,6 +754,12 @@ export default function Home() {
   const displayName =
     profile?.display_name || profile?.username || user.email || 'Tu';
 
+  const now = new Date();
+  const currentMonthIndex = now.getMonth();
+  const prevMonthIndex = currentMonthIndex === 0 ? 11 : currentMonthIndex - 1;
+  const currentMonthName = MONTH_LABELS[currentMonthIndex];
+  const prevMonthName = MONTH_LABELS[prevMonthIndex];
+
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       <AppHeader displayName={displayName} />
@@ -906,21 +882,32 @@ export default function Home() {
         )}
       </section>
 
-      {/* Contenuto centrale + ingredienti del momento */}
+      {/* Contenuto centrale con 3 colonne su desktop */}
       <div className="flex-1 px-4 py-4 flex justify-center">
-        <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 items-start">
-          {/* Colonna sinistra (desktop): ingredienti del momento */}
-          <div className="hidden md:flex flex-col gap-4">
+        <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+          {/* Colonna sinistra (desktop): mese scorso + settimana scorsa */}
+          <div className="hidden md:flex flex-col gap-3">
             {loadingIngredientMoments ? (
               <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 text-[11px] text-slate-400">
                 Carico i tuoi ingredienti del momento...
               </div>
             ) : (
-              <IngredientHighlightsBox data={ingredientMoments} />
+              <>
+                <IngredientStatCard
+                  title="Ingrediente del mese scorso"
+                  subtitle={prevMonthName}
+                  highlight={ingredientMoments.prevMonth}
+                />
+                <IngredientStatCard
+                  title="Ingrediente della settimana scorsa"
+                  subtitle="Settimana precedente"
+                  highlight={ingredientMoments.prevWeek}
+                />
+              </>
             )}
           </div>
 
-          {/* Colonna principale (counter) */}
+          {/* Colonna centrale: counter + mobile ingredient panel */}
           <div className="flex flex-col items-center">
             <div className="w-full max-w-md">
               {/* Versione mobile: ingredienti del momento collassabili sopra al counter */}
@@ -938,12 +925,34 @@ export default function Home() {
                         Carico i tuoi ingredienti del momento...
                       </p>
                     ) : (
-                      <IngredientHighlightsBox data={ingredientMoments} />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                        <IngredientStatCard
+                          title="Mese scorso"
+                          subtitle={prevMonthName}
+                          highlight={ingredientMoments.prevMonth}
+                        />
+                        <IngredientStatCard
+                          title="Mese corrente"
+                          subtitle={currentMonthName}
+                          highlight={ingredientMoments.currentMonth}
+                        />
+                        <IngredientStatCard
+                          title="Settimana scorsa"
+                          subtitle="Settimana precedente"
+                          highlight={ingredientMoments.prevWeek}
+                        />
+                        <IngredientStatCard
+                          title="Settimana corrente"
+                          subtitle="Questa settimana"
+                          highlight={ingredientMoments.currentWeek}
+                        />
+                      </div>
                     )}
                   </div>
                 </details>
               </div>
 
+              {/* Selettore anno + counter */}
               <div className="flex items-center justify-center gap-3 mb-4">
                 <button
                   onClick={() => setYear(y => y - 1)}
@@ -1043,6 +1052,28 @@ export default function Home() {
                 </p>
               )}
             </div>
+          </div>
+
+          {/* Colonna destra (desktop): mese corrente + settimana corrente */}
+          <div className="hidden md:flex flex-col gap-3">
+            {loadingIngredientMoments ? (
+              <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 text-[11px] text-slate-400">
+                Carico i tuoi ingredienti del momento...
+              </div>
+            ) : (
+              <>
+                <IngredientStatCard
+                  title="Ingrediente del mese corrente"
+                  subtitle={currentMonthName}
+                  highlight={ingredientMoments.currentMonth}
+                />
+                <IngredientStatCard
+                  title="Ingrediente della settimana corrente"
+                  subtitle="Questa settimana"
+                  highlight={ingredientMoments.currentWeek}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>

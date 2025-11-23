@@ -70,12 +70,14 @@ export default function IngredientProfilePage() {
   const [pizzas, setPizzas] = useState<PizzaForIngredient[]>([]);
   const [coOccurring, setCoOccurring] = useState<CoOccurringIngredient[]>([]);
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
-  const [profilesMap, setProfilesMap] = useState<Record<string, ProfileLite>>({});
+  const [profilesMap, setProfilesMap] = useState<Record<string, ProfileLite>>(
+    {}
+  );
   const [originStats, setOriginStats] = useState<OriginStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // auth (solo per essere sicuri di avere sessione, anche se i dati sono globali)
+  // auth (per ora richiediamo login anche per vedere il profilo ingrediente)
   useEffect(() => {
     const loadUser = async () => {
       const {
@@ -152,7 +154,6 @@ export default function IngredientProfilePage() {
 
         if (piError) throw piError;
 
-        // dedup per pizza_id, nel caso sia stato inserito due volte a sbaglio
         const pizzaMap = new Map<number, PizzaForIngredient>();
 
         (piData ?? []).forEach((row: any) => {
@@ -485,9 +486,12 @@ export default function IngredientProfilePage() {
                     <span className="w-4 text-slate-500">
                       {idx + 1}.
                     </span>
-                    <span className="text-slate-100">
+                    <Link
+                      href={`/ingredients/${ing.ingredientId}`}
+                      className="text-slate-100 hover:underline"
+                    >
                       {ing.name}
-                    </span>
+                    </Link>
                   </div>
                   <span className="text-slate-300">
                     {ing.count} pizza{ing.count === 1 ? '' : 'e'}
