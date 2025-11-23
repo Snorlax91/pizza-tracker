@@ -62,6 +62,65 @@ const MONTH_LABELS = [
 
 const CURRENT_YEAR = new Date().getFullYear();
 
+// Mapping ingredienti → emoji
+const INGREDIENT_EMOJI_MAP: Record<string, string> = {
+  // classici
+  'cipolla': '🧅',
+  'cipolle': '🧅',
+  'salame': '🍖',
+  'salame piccante': '🌶️',
+  'salamino piccante': '🌶️',
+  'salsiccia': '🥩',
+  'wurstel': '🌭',
+  'wurstel di pollo': '🌭',
+  'prosciutto': '🥓',
+  'prosciutto cotto': '🥓',
+  'prosciutto crudo': '🥓',
+  'speck': '🥓',
+
+  // verdure
+  'funghi': '🍄',
+  'carciofi': '🫒',
+  'carciofo': '🫒',
+  'zucchine': '🥒',
+  'zucchina': '🥒',
+  'melanzane': '🍆',
+  'melanzana': '🍆',
+  'peperoni': '🫑',
+  'peperone': '🫑',
+  'rucola': '🥬',
+  'insalata': '🥬',
+  'basilico': '🌿',
+
+  // mare
+  'tonno': '🐟',
+  'acciughe': '🐟',
+  'acciuga': '🐟',
+  'gamberi': '🦐',
+
+  // extra
+  'olive': '🫒',
+  'olive nere': '🫒',
+  'olive verdi': '🫒',
+  'mais': '🌽',
+  'ananas': '🍍',
+  'gorgonzola': '🧀',
+  'mozzarella di bufala': '🧀',
+  'bufala': '🧀',
+};
+
+function getIngredientEmoji(name?: string | null): string {
+  if (!name) return '🍕';
+  // normalizziamo un minimo (minuscolo + tolgo accenti)
+  let n = name.toLowerCase().trim();
+  n = n
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, ''); // rimuove accenti tipo 'pèperòni'
+
+  return INGREDIENT_EMOJI_MAP[n] ?? '🍕';
+}
+
+
 // Hook per gestire contatori annuali (base_count + pizze)
 function useYearlyPizzaStats(userId?: string) {
   const [year, setYear] = useState(CURRENT_YEAR);
@@ -157,12 +216,17 @@ function IngredientStatCard({
       <span className="text-[11px] text-slate-500">{subtitle}</span>
       {highlight ? (
         <div className="mt-2 flex items-baseline justify-between gap-2">
-          <Link
-            href={`/ingredients/${highlight.ingredientId}`}
-            className="text-sm font-semibold text-slate-50 hover:underline"
-          >
-            {highlight.name}
-          </Link>
+          <div className="flex items-baseline gap-2">
+            <span className="text-lg">
+              {getIngredientEmoji(highlight.name)}
+            </span>
+            <Link
+              href={`/ingredients/${highlight.ingredientId}`}
+              className="text-sm font-semibold text-slate-50 hover:underline"
+            >
+              {highlight.name}
+            </Link>
+          </div>
           <span className="text-[11px] text-slate-400">
             {highlight.count} pizze
           </span>
