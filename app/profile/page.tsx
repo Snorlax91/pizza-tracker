@@ -24,9 +24,28 @@ type GlobalRank = {
 
 type IngredientRank = {
     ingredientName: string | null;
+    ingredientId: number | null;
     rank: number | null;
     totalUsers: number;
     count: number;
+};
+
+type WeekdayRank = {
+    weekdayIndex: number;
+    weekdayName: string;
+    rank: number;
+    totalUsers: number;
+    count: number;
+};
+
+type RankingEntry = {
+    type: 'year2025' | 'currentMonth' | 'weekday' | 'ingredient' | 'bestIngredient';
+    label: string;
+    rank: number;
+    totalUsers: number;
+    count?: number;
+    ingredientId?: number;
+    ingredientName?: string;
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
@@ -55,6 +74,7 @@ export default function ProfilePage() {
     });
     const [ingredientRank, setIngredientRank] = useState<IngredientRank>({
         ingredientName: null,
+        ingredientId: null,
         rank: null,
         totalUsers: 0,
         count: 0,
@@ -62,6 +82,9 @@ export default function ProfilePage() {
 
     const [baseCount, setBaseCount] = useState<number>(0);
     const [savingBaseCount, setSavingBaseCount] = useState(false);
+
+    // Stati per i nuovi ranking
+    const [rankings, setRankings] = useState<RankingEntry[]>([]);
 
     // Carica profilo + user
     useEffect(() => {
@@ -320,6 +343,7 @@ export default function ProfilePage() {
                     if (sorted.length === 0) {
                         setIngredientRank({
                             ingredientName: null,
+                            ingredientId: null,
                             rank: null,
                             totalUsers: 0,
                             count: 0,
@@ -362,6 +386,7 @@ export default function ProfilePage() {
 
                         setIngredientRank({
                             ingredientName: fav.name,
+                            ingredientId: fav.id,
                             rank: myIndex === -1 ? null : myIndex + 1,
                             totalUsers,
                             count: myCount,
@@ -397,6 +422,233 @@ export default function ProfilePage() {
                     // non blocchiamo la pagina se fallisce questo
                     setBaseCount(0);
                 }
+
+                // ========== NUOVA LOGICA PER RANKING COMPLESSI ==========
+                const newRankings: RankingEntry[] = [];
+
+                // 1. RANK GLOBALE PER IL 2025 (sempre mostrato)
+                try {
+                    const { data: pizzas2025, error: error2025 } = await supabase
+                        .from('pizzas')
+                        .select('user_id')
+                        .gte('eaten_at', '2025-01-01')
+                        .lte('eaten_at', '2025-12-31');
+
+                    if (!error2025 && pizzas2025) {
+                        const counts: Record<string, number> = {};
+                        pizzas2025.forEach(row => {
+                            counts[row.user_id] = (counts[row.user_id] || 0) + 1;
+                        });
+
+                        const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                        const totalUsers = entries.length;
+                        const myIndex = entries.findIndex(([uid]) => uid === userId);
+                        const myCount = counts[userId] || 0;
+
+                        if (myIndex !== -1) {
+                            newRankings.push({
+                                type: 'year2025',
+                                label: 'Pizze mangiate nel 2025',
+                                rank: myIndex + 1,
+                                totalUsers,
+                                count: myCount,
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Impossibile calcolare rank 2025', e);
+                }
+
+                // 2. RANK GLOBALE PER IL MESE CORRENTE (sempre mostrato)
+                try {
+                    const now = new Date();
+                    const currentYear = now.getFullYear();
+                    const currentMonth = now.getMonth() + 1; // 1-12
+                    const startDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+                    
+                    // Calcola l'ultimo giorno del mese corrente
+                    const lastDay = new Date(currentYear, currentMonth, 0).getDate();
+                    const endDate = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+                    const { data: pizzasMonth, error: errorMonth } = await supabase
+                        .from('pizzas')
+                        .select('user_id')
+                        .gte('eaten_at', startDate)
+                        .lte('eaten_at', endDate);
+
+                    if (!errorMonth && pizzasMonth) {
+                        const counts: Record<string, number> = {};
+                        pizzasMonth.forEach(row => {
+                            counts[row.user_id] = (counts[row.user_id] || 0) + 1;
+                        });
+
+                        const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                        const totalUsers = entries.length;
+                        const myIndex = entries.findIndex(([uid]) => uid === userId);
+                        const myCount = counts[userId] || 0;
+
+                        if (myIndex !== -1) {
+                            const monthNames = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 
+                                              'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+                            newRankings.push({
+                                type: 'currentMonth',
+                                label: `Pizze mangiate a ${monthNames[currentMonth - 1]} ${currentYear}`,
+                                rank: myIndex + 1,
+                                totalUsers,
+                                count: myCount,
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Impossibile calcolare rank mese corrente', e);
+                }
+
+                // 3. TOP 10 PER GIORNI DELLA SETTIMANA
+                try {
+                    const weekdayNames = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+                    
+                    // Carica tutte le pizze per l'anno selezionato per calcolare i ranking per weekday
+                    const { data: allPizzasYear, error: errorYear } = await supabase
+                        .from('pizzas')
+                        .select('user_id, eaten_at')
+                        .gte('eaten_at', `${statsYear}-01-01`)
+                        .lte('eaten_at', `${statsYear}-12-31`);
+
+                    if (!errorYear && allPizzasYear) {
+                        // Conta le pizze per utente per ogni giorno della settimana
+                        const weekdayCounts: Record<number, Record<string, number>> = {};
+                        for (let i = 0; i < 7; i++) {
+                            weekdayCounts[i] = {};
+                        }
+
+                        allPizzasYear.forEach(row => {
+                            if (!row.eaten_at) return;
+                            const d = new Date(row.eaten_at);
+                            if (Number.isNaN(d.getTime())) return;
+                            const weekday = d.getDay(); // 0-6
+                            weekdayCounts[weekday][row.user_id] = (weekdayCounts[weekday][row.user_id] || 0) + 1;
+                        });
+
+                        // Per ogni giorno della settimana, verifica se l'utente è in top 10
+                        for (let weekday = 0; weekday < 7; weekday++) {
+                            const counts = weekdayCounts[weekday];
+                            const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                            const myIndex = entries.findIndex(([uid]) => uid === userId);
+                            const myCount = counts[userId] || 0;
+
+                            if (myIndex !== -1 && myIndex < 10 && myCount > 0) {
+                                newRankings.push({
+                                    type: 'weekday',
+                                    label: `Pizze mangiate di ${weekdayNames[weekday]}`,
+                                    rank: myIndex + 1,
+                                    totalUsers: entries.length,
+                                    count: myCount,
+                                });
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Impossibile calcolare rank per weekday', e);
+                }
+
+                // 4. TOP 10 PER INGREDIENTI
+                try {
+                    // Ottieni tutti gli ingredienti usati dall'utente nell'anno selezionato
+                    const freq: Record<number, { name: string; count: number }> = {};
+                    (data ?? []).forEach((p: any) => {
+                        (p.pizza_ingredients ?? []).forEach((pi: any) => {
+                            const ing = pi.ingredients;
+                            if (!ing) return;
+                            const id = ing.id as number;
+                            if (!freq[id]) {
+                                freq[id] = { name: ing.name, count: 0 };
+                            }
+                            freq[id].count += 1;
+                        });
+                    });
+
+                    // Per ogni ingrediente usato, calcola il ranking globale
+                    const ingredientRankings: Array<{
+                        ingredientId: number;
+                        ingredientName: string;
+                        rank: number;
+                        totalUsers: number;
+                        count: number;
+                    }> = [];
+
+                    for (const [ingredientId, { name, count }] of Object.entries(freq)) {
+                        const { data: allPi, error: allPiError } = await supabase
+                            .from('pizza_ingredients')
+                            .select(`
+                                pizza_id,
+                                ingredient_id,
+                                pizzas!inner (
+                                    user_id,
+                                    eaten_at
+                                )
+                            `)
+                            .eq('ingredient_id', Number(ingredientId))
+                            .gte('pizzas.eaten_at', `${statsYear}-01-01`)
+                            .lte('pizzas.eaten_at', `${statsYear}-12-31`);
+
+                        if (allPiError || !allPi) continue;
+
+                        const byUser: Record<string, number> = {};
+                        allPi.forEach((row: any) => {
+                            const uid = row.pizzas.user_id as string;
+                            byUser[uid] = (byUser[uid] || 0) + 1;
+                        });
+
+                        const entries = Object.entries(byUser).sort((a, b) => b[1] - a[1]);
+                        const totalUsers = entries.length;
+                        const myIndex = entries.findIndex(([uid]) => uid === userId);
+
+                        if (myIndex !== -1) {
+                            ingredientRankings.push({
+                                ingredientId: Number(ingredientId),
+                                ingredientName: name,
+                                rank: myIndex + 1,
+                                totalUsers,
+                                count,
+                            });
+                        }
+                    }
+
+                    // Ordina per rank (migliori primi)
+                    ingredientRankings.sort((a, b) => a.rank - b.rank);
+
+                    // Aggiungi tutti quelli in top 10
+                    const top10Ingredients = ingredientRankings.filter(r => r.rank <= 10);
+                    top10Ingredients.forEach(r => {
+                        newRankings.push({
+                            type: 'ingredient',
+                            label: `Uso dell'ingrediente`,
+                            rank: r.rank,
+                            totalUsers: r.totalUsers,
+                            count: r.count,
+                            ingredientId: r.ingredientId,
+                            ingredientName: r.ingredientName,
+                        });
+                    });
+
+                    // 5. Se non ci sono ingredienti in top 10, aggiungi il migliore
+                    if (top10Ingredients.length === 0 && ingredientRankings.length > 0) {
+                        const best = ingredientRankings[0];
+                        newRankings.push({
+                            type: 'bestIngredient',
+                            label: `Miglior posizione per ingrediente`,
+                            rank: best.rank,
+                            totalUsers: best.totalUsers,
+                            count: best.count,
+                            ingredientId: best.ingredientId,
+                            ingredientName: best.ingredientName,
+                        });
+                    }
+                } catch (e) {
+                    console.warn('Impossibile calcolare rank per ingredienti', e);
+                }
+
+                setRankings(newRankings);
 
 
             } catch (err: any) {
@@ -835,49 +1087,45 @@ export default function ProfilePage() {
                                 </div>
 
                                 {/* Ranking globali */}
-                                <div className="mt-1 space-y-1 text-[11px] text-slate-300">
+                                <div className="mt-1 space-y-1.5 text-[11px] text-slate-300">
                                     <p className="font-semibold">Posizionamenti globali</p>
-                                    <p>
-                                        Pizze mangiate nel {statsYear}:{' '}
-                                        {globalRank.rank && globalRank.totalUsers > 0 ? (
-                                            <>
-                                                sei <span className="font-bold">#{globalRank.rank}</span>{' '}
-                                                su {globalRank.totalUsers} utenti.
-                                            </>
-                                        ) : (
-                                            <>nessun dato per quest&apos;anno.</>
-                                        )}
-                                    </p>
-                                    <p>
-                                        {ingredientRank.ingredientName ? (
-                                            ingredientRank.rank &&
-                                                ingredientRank.totalUsers > 0 ? (
-                                                <>
-                                                    Per l&apos;ingrediente{' '}
-                                                    <span className="font-semibold">
-                                                        {ingredientRank.ingredientName}
-                                                    </span>{' '}
-                                                    sei{' '}
-                                                    <span className="font-bold">
-                                                        #{ingredientRank.rank}
-                                                    </span>{' '}
-                                                    su {ingredientRank.totalUsers} utenti (lo hai usato{' '}
-                                                    {ingredientRank.count} volte).
-                                                </>
-                                            ) : (
-                                                <>
-                                                    Per l&apos;ingrediente{' '}
-                                                    <span className="font-semibold">
-                                                        {ingredientRank.ingredientName}
-                                                    </span>{' '}
-                                                    non ci sono abbastanza dati per la classifica.
-                                                </>
-                                            )
-                                        ) : (
-                                            <>Non hai ancora ingredienti preferiti per questo anno.</>
-                                        )}
-                                    </p>
-                                    <p className="text-[10px] text-slate-500">
+                                    {rankings.length === 0 ? (
+                                        <p className="text-slate-400">Nessun dato disponibile per il periodo selezionato.</p>
+                                    ) : (
+                                        <>
+                                            {rankings.map((ranking, idx) => {
+                                                // Determina se mostrare il nome dell'ingrediente come link
+                                                const showIngredientLink = ranking.type === 'ingredient' || ranking.type === 'bestIngredient';
+                                                
+                                                return (
+                                                    <p key={idx} className="leading-relaxed">
+                                                        {ranking.label}
+                                                        {showIngredientLink && ranking.ingredientName && ranking.ingredientId && (
+                                                            <>
+                                                                {' '}
+                                                                <Link 
+                                                                    href={`/stats/ingredients/${ranking.ingredientId}`}
+                                                                    className="font-semibold text-amber-400 hover:text-amber-300 underline"
+                                                                >
+                                                                    {ranking.ingredientName}
+                                                                </Link>
+                                                            </>
+                                                        )}
+                                                        {!showIngredientLink && ':'}
+                                                        {' '}sei{' '}
+                                                        <span className="font-bold text-amber-400">
+                                                            #{ranking.rank}
+                                                        </span>
+                                                        {' '}su {ranking.totalUsers} utenti
+                                                        {ranking.count !== undefined && (
+                                                            <> ({ranking.count} {ranking.count === 1 ? 'pizza' : 'pizze'})</>
+                                                        )}.
+                                                    </p>
+                                                );
+                                            })}
+                                        </>
+                                    )}
+                                    <p className="text-[10px] text-slate-500 pt-1">
                                         Le classifiche globali sono calcolate sulle pizze
                                         registrate nel database (non includono il contatore
                                         &quot;di partenza&quot;).
