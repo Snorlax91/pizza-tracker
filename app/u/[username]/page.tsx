@@ -761,7 +761,7 @@ export default function UserPizzasPage() {
                           {ingredients.map(ing => (
                             <Link
                               key={ing.id}
-                              href={`/ingredients/${ing.id}`}
+                              href={`/stats/ingredients/${ing.id}`}
                               className="px-2 py-1 rounded-full bg-slate-900 border border-slate-700 text-[11px] flex items-center gap-1 hover:border-amber-400 hover:text-amber-200"
                             >
                               <span className="text-sm">
