@@ -543,6 +543,7 @@ export default function Home() {
   }, [user?.id]);
 
   // Ingredienti del momento (mese scorso / mese corrente / settimana scorsa / settimana corrente)
+  // Ingredienti del momento (mese scorso / mese corrente / settimana scorsa / settimana corrente)
   useEffect(() => {
     const loadIngredientMoments = async () => {
       if (!user?.id) return;
@@ -552,58 +553,41 @@ export default function Home() {
         const now = new Date();
         now.setHours(0, 0, 0, 0);
 
-        // Mese corrente
-        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        // helper per normalizzare "YYYY-MM-DD"
+        const toDateOnly = (d: Date) => d.toISOString().slice(0, 10);
 
-        // Mese precedente
-        const prevMonthIndex = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+        // Calcolo confini MESI
+        const currentMonthStart = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          1
+        );
+        const currentMonthEnd = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          1
+        ); // esclusivo
+
+        const prevMonthIndex =
+          now.getMonth() === 0 ? 11 : now.getMonth() - 1;
         const prevMonthYear =
           now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
         const prevMonthStart = new Date(prevMonthYear, prevMonthIndex, 1);
-        const prevMonthEnd = new Date(
-          prevMonthYear,
-          prevMonthIndex + 1,
-          1
-        );
+        const prevMonthEnd = new Date(prevMonthYear, prevMonthIndex + 1, 1); // esclusivo
 
-        // Settimana corrente (lunedì)
+        // Calcolo confini SETTIMANE (consideriamo lunedì come inizio)
         const currentWeekStart = new Date(now);
         const day = currentWeekStart.getDay(); // 0=dom,...6=sab
         const diffToMonday = (day + 6) % 7; // 0->6,1->0,...
         currentWeekStart.setDate(currentWeekStart.getDate() - diffToMonday);
         currentWeekStart.setHours(0, 0, 0, 0);
 
-        // Settimana scorsa
+        const currentWeekEnd = new Date(currentWeekStart);
+        currentWeekEnd.setDate(currentWeekEnd.getDate() + 7); // esclusivo
+
         const prevWeekStart = new Date(currentWeekStart);
         prevWeekStart.setDate(prevWeekStart.getDate() - 7);
         const prevWeekEnd = new Date(currentWeekStart); // esclusivo
-
-        // prendiamo all’indietro 90 giorni
-        const ninetyDaysAgo = new Date(now);
-        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-        const { data, error } = await supabase
-          .from('pizza_ingredients')
-          .select(
-            `
-            ingredient_id,
-            ingredients ( id, name ),
-            pizzas!inner (
-              eaten_at,
-              user_id
-            )
-          `
-          )
-          .eq('pizzas.user_id', user.id)
-          .gte('pizzas.eaten_at', ninetyDaysAgo.toISOString());
-
-        if (error) throw error;
-
-        const prevMonthCounts: Record<number, { name: string; count: number }> = {};
-        const currentMonthCounts: Record<number, { name: string; count: number }> = {};
-        const prevWeekCounts: Record<number, { name: string; count: number }> = {};
-        const currentWeekCounts: Record<number, { name: string; count: number }> = {};
 
         const isBoringIngredient = (name: string | undefined | null) => {
           if (!name) return true;
@@ -611,71 +595,87 @@ export default function Home() {
           return n === 'pomodoro' || n === 'mozzarella';
         };
 
-        (data ?? []).forEach((row: any) => {
-          const ingId = row.ingredient_id as number;
-          const ingName = row.ingredients?.name as string | undefined;
-          const eaten_at = row.pizzas?.eaten_at as string | null;
+        // Helper generico: restituisce l'ingrediente top in un intervallo [start, end)
+        const getTopIngredientForPeriod = async (
+          start: Date,
+          end: Date
+        ): Promise<IngredientMomentHighlight | null> => {
+          const { data, error } = await supabase
+            .from('pizza_ingredients')
+            .select(
+              `
+            ingredient_id,
+            ingredients ( id, name ),
+            pizzas!inner (
+              id,
+              eaten_at,
+              user_id
+            )
+          `
+            )
+            .eq('pizzas.user_id', user.id)
+            .gte('pizzas.eaten_at', toDateOnly(start))
+            .lt('pizzas.eaten_at', toDateOnly(end));
 
-          if (!ingId || !ingName || !eaten_at) return;
-          if (isBoringIngredient(ingName)) return;
+          if (error) throw error;
 
-          const d = new Date(eaten_at);
-          if (Number.isNaN(d.getTime())) return;
+          // contiamo quante PIZZE diverse usano ogni ingrediente
+          const counts: Record<
+            number,
+            { name: string; pizzaIds: Set<number> }
+          > = {};
 
-          // mese precedente
-          if (d >= prevMonthStart && d < prevMonthEnd) {
-            if (!prevMonthCounts[ingId]) {
-              prevMonthCounts[ingId] = { name: ingName, count: 0 };
+          (data ?? []).forEach((row: any) => {
+            const ingId = row.ingredient_id as number;
+            const ingName = row.ingredients?.name as string | undefined;
+            const pizzaId = row.pizzas?.id as number | undefined;
+
+            if (!ingId || !ingName || !pizzaId) return;
+            if (isBoringIngredient(ingName)) return;
+
+            if (!counts[ingId]) {
+              counts[ingId] = {
+                name: ingName,
+                pizzaIds: new Set<number>(),
+              };
             }
-            prevMonthCounts[ingId].count += 1;
-          }
+            counts[ingId].pizzaIds.add(pizzaId);
+          });
 
-          // mese corrente
-          if (d >= currentMonthStart && d < currentMonthEnd) {
-            if (!currentMonthCounts[ingId]) {
-              currentMonthCounts[ingId] = { name: ingName, count: 0 };
-            }
-            currentMonthCounts[ingId].count += 1;
-          }
-
-          // settimana scorsa
-          if (d >= prevWeekStart && d < prevWeekEnd) {
-            if (!prevWeekCounts[ingId]) {
-              prevWeekCounts[ingId] = { name: ingName, count: 0 };
-            }
-            prevWeekCounts[ingId].count += 1;
-          }
-
-          // settimana corrente
-          if (d >= currentWeekStart && d <= now) {
-            if (!currentWeekCounts[ingId]) {
-              currentWeekCounts[ingId] = { name: ingName, count: 0 };
-            }
-            currentWeekCounts[ingId].count += 1;
-          }
-        });
-
-        const pickTop = (
-          map: Record<number, { name: string; count: number }>
-        ): IngredientMomentHighlight | null => {
-          const entries = Object.entries(map);
+          const entries = Object.entries(counts);
           if (entries.length === 0) return null;
-          const [idStr, val] = entries.sort((a, b) => b[1].count - a[1].count)[0];
+
+          entries.sort(
+            (a, b) => b[1].pizzaIds.size - a[1].pizzaIds.size
+          );
+
+          const [idStr, val] = entries[0];
           return {
             ingredientId: Number(idStr),
             name: val.name,
-            count: val.count,
+            count: val.pizzaIds.size,
           };
         };
 
+        const [prevMonthTop, currentMonthTop, prevWeekTop, currentWeekTop] =
+          await Promise.all([
+            getTopIngredientForPeriod(prevMonthStart, prevMonthEnd),
+            getTopIngredientForPeriod(currentMonthStart, currentMonthEnd),
+            getTopIngredientForPeriod(prevWeekStart, prevWeekEnd),
+            getTopIngredientForPeriod(currentWeekStart, currentWeekEnd),
+          ]);
+
         setIngredientMoments({
-          prevMonth: pickTop(prevMonthCounts),
-          currentMonth: pickTop(currentMonthCounts),
-          prevWeek: pickTop(prevWeekCounts),
-          currentWeek: pickTop(currentWeekCounts),
+          prevMonth: prevMonthTop,
+          currentMonth: currentMonthTop,
+          prevWeek: prevWeekTop,
+          currentWeek: currentWeekTop,
         });
       } catch (err) {
-        console.error('Errore nel calcolo degli ingredienti del momento', err);
+        console.error(
+          'Errore nel calcolo degli ingredienti del momento',
+          err
+        );
       } finally {
         setLoadingIngredientMoments(false);
       }
@@ -683,6 +683,7 @@ export default function Home() {
 
     loadIngredientMoments();
   }, [user?.id]);
+
 
   const handleUndoLastPizza = async () => {
     if (!user) return;
@@ -846,15 +847,14 @@ export default function Home() {
               {/* ANNO */}
               <div className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                    yearRank?.rank === 1
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${yearRank?.rank === 1
                       ? 'bg-yellow-400 text-slate-900'
                       : yearRank?.rank === 2
-                      ? 'bg-slate-300 text-slate-900'
-                      : yearRank?.rank === 3
-                      ? 'bg-amber-700 text-slate-50'
-                      : 'bg-slate-700 text-slate-100'
-                  }`}
+                        ? 'bg-slate-300 text-slate-900'
+                        : yearRank?.rank === 3
+                          ? 'bg-amber-700 text-slate-50'
+                          : 'bg-slate-700 text-slate-100'
+                    }`}
                 >
                   {yearRank?.rank ? `#${yearRank.rank}` : 'N/D'}
                 </span>
@@ -877,15 +877,14 @@ export default function Home() {
               {/* MESE */}
               <div className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                    monthRank?.rank === 1
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${monthRank?.rank === 1
                       ? 'bg-yellow-400 text-slate-900'
                       : monthRank?.rank === 2
-                      ? 'bg-slate-300 text-slate-900'
-                      : monthRank?.rank === 3
-                      ? 'bg-amber-700 text-slate-50'
-                      : 'bg-slate-700 text-slate-100'
-                  }`}
+                        ? 'bg-slate-300 text-slate-900'
+                        : monthRank?.rank === 3
+                          ? 'bg-amber-700 text-slate-50'
+                          : 'bg-slate-700 text-slate-100'
+                    }`}
                 >
                   {monthRank?.rank ? `#${monthRank.rank}` : 'N/D'}
                 </span>
@@ -918,23 +917,22 @@ export default function Home() {
                     className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-slate-800/80 border-slate-700"
                   >
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        h.rank === 1
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${h.rank === 1
                           ? 'bg-yellow-400 text-slate-900'
                           : h.rank === 2
-                          ? 'bg-slate-300 text-slate-900'
-                          : h.rank === 3
-                          ? 'bg-amber-700 text-slate-50'
-                          : 'bg-slate-700 text-slate-100'
-                      }`}
+                            ? 'bg-slate-300 text-slate-900'
+                            : h.rank === 3
+                              ? 'bg-amber-700 text-slate-50'
+                              : 'bg-slate-700 text-slate-100'
+                        }`}
                     >
                       {h.rank === 1
                         ? '🥇'
                         : h.rank === 2
-                        ? '🥈'
-                        : h.rank === 3
-                        ? '🥉'
-                        : `#${h.rank}`}
+                          ? '🥈'
+                          : h.rank === 3
+                            ? '🥉'
+                            : `#${h.rank}`}
                     </span>
                     <div className="flex flex-col">
                       <span className="text-slate-50 font-semibold">
