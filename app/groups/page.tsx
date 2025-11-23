@@ -43,8 +43,17 @@ export default function GroupsPage() {
   // form crea gruppo
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newVisibility, setNewVisibility] = useState<'public' | 'closed' | 'private'>('public');
+  const [newVisibility, setNewVisibility] = useState<
+    'public' | 'closed' | 'private'
+  >('public');
   const [creating, setCreating] = useState(false);
+
+  // ricerca
+  const [mySearch, setMySearch] = useState('');
+  const [exploreSearch, setExploreSearch] = useState('');
+
+  // preferiti (solo per "i miei gruppi", salvati in localStorage)
+  const [favoriteGroupIds, setFavoriteGroupIds] = useState<number[]>([]);
 
   // Carica utente
   useEffect(() => {
@@ -67,6 +76,44 @@ export default function GroupsPage() {
 
     loadUser();
   }, [router]);
+
+  // Carica preferiti da localStorage quando ho l'utente
+  useEffect(() => {
+    if (!user) return;
+    try {
+      const key = `favorite_groups_${user.id}`;
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setFavoriteGroupIds(parsed);
+        }
+      }
+    } catch (err) {
+      console.warn('Errore nel leggere i preferiti da localStorage', err);
+    }
+  }, [user]);
+
+  const persistFavorites = (next: number[]) => {
+    if (!user) return;
+    try {
+      const key = `favorite_groups_${user.id}`;
+      localStorage.setItem(key, JSON.stringify(next));
+    } catch (err) {
+      console.warn('Errore nel salvare i preferiti su localStorage', err);
+    }
+  };
+
+  const toggleFavorite = (groupId: number) => {
+    setFavoriteGroupIds(prev => {
+      const exists = prev.includes(groupId);
+      const next = exists
+        ? prev.filter(id => id !== groupId)
+        : [...prev, groupId];
+      persistFavorites(next);
+      return next;
+    });
+  };
 
   // Carica gruppi e membership
   useEffect(() => {
@@ -117,13 +164,11 @@ export default function GroupsPage() {
 
         // aggiungi anche i gruppi dove sei owner
         (myGroupsData ?? [])
-        .filter(g => g.owner_id === user.id)
-        .forEach(g => memberGroupIds.add(g.id));
+          .filter(g => g.owner_id === user.id)
+          .forEach(g => memberGroupIds.add(g.id));
 
         const filtered =
-          exploreData?.filter(
-            g => !memberGroupIds.has(g.id)
-          ) ?? [];
+          exploreData?.filter(g => !memberGroupIds.has(g.id)) ?? [];
 
         setExploreGroups(filtered as Group[]);
       } catch (err: any) {
@@ -197,6 +242,13 @@ export default function GroupsPage() {
 
       setMemberships(prev => prev.filter(m => m.id !== membership.id));
       setMyGroups(prev => prev.filter(g => g.id !== groupId));
+
+      // se il gruppo era preferito, toglilo
+      setFavoriteGroupIds(prev => {
+        const next = prev.filter(id => id !== groupId);
+        persistFavorites(next);
+        return next;
+      });
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message ?? 'Errore nell’uscire dal gruppo.');
@@ -276,6 +328,32 @@ export default function GroupsPage() {
     );
   }
 
+  // Liste filtrate / ordinate
+
+  const mySearchNorm = mySearch.trim().toLowerCase();
+  const visibleMyGroups = myGroups
+    .filter(g => {
+      if (!mySearchNorm) return true;
+      const name = g.name.toLowerCase();
+      const desc = (g.description ?? '').toLowerCase();
+      return name.includes(mySearchNorm) || desc.includes(mySearchNorm);
+    })
+    .sort((a, b) => {
+      const aFav = favoriteGroupIds.includes(a.id);
+      const bFav = favoriteGroupIds.includes(b.id);
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  const exploreSearchNorm = exploreSearch.trim().toLowerCase();
+  const visibleExploreGroups = exploreGroups.filter(g => {
+    if (!exploreSearchNorm) return true;
+    const name = g.name.toLowerCase();
+    const desc = (g.description ?? '').toLowerCase();
+    return name.includes(exploreSearchNorm) || desc.includes(exploreSearchNorm);
+  });
+
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       <AppHeader />
@@ -325,48 +403,99 @@ export default function GroupsPage() {
           <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4 overflow-y-auto">
             {tab === 'my' && (
               <>
-                <h2 className="text-sm font-semibold mb-3">
-                  I miei gruppi ({myGroups.length})
-                </h2>
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <h2 className="text-sm font-semibold">
+                    I miei gruppi ({myGroups.length})
+                  </h2>
+                  {myGroups.length > 0 && (
+                    <input
+                      type="text"
+                      value={mySearch}
+                      onChange={e => setMySearch(e.target.value)}
+                      placeholder="Cerca tra i tuoi gruppi..."
+                      className="px-2 py-1 rounded-full bg-slate-950 border border-slate-700 text-[11px] focus:outline-none focus:ring focus:ring-slate-500"
+                    />
+                  )}
+                </div>
+
                 {loadingGroups ? (
                   <p className="text-xs text-slate-300">
                     Carico i tuoi gruppi...
                   </p>
-                ) : myGroups.length === 0 ? (
+                ) : visibleMyGroups.length === 0 ? (
                   <p className="text-xs text-slate-400">
-                    Non fai ancora parte di nessun gruppo. Creane uno o
-                    unisciti dalla scheda &quot;Esplora&quot;.
+                    {myGroups.length === 0
+                      ? 'Non fai ancora parte di nessun gruppo. Creane uno o unisciti dalla scheda "Esplora".'
+                      : 'Nessun gruppo corrisponde alla ricerca.'}
                   </p>
                 ) : (
                   <div className="space-y-3 text-sm">
-                    {myGroups.map(group => {
+                    {visibleMyGroups.map(group => {
                       const membership = getMembershipForGroup(group.id);
                       const isOwner = group.owner_id === user.id;
+                      const isFavorite = favoriteGroupIds.includes(group.id);
+
                       return (
                         <div
                           key={group.id}
                           className="border border-slate-700 rounded-xl p-3 flex flex-col gap-2"
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <Link
-                              href={`/groups/${group.id}`}
-                              className="font-semibold hover:underline"
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <Link
+                                  href={`/groups/${group.id}`}
+                                  className="font-semibold hover:underline"
+                                >
+                                  {group.name}
+                                </Link>
+                                <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-300">
+                                  {group.visibility === 'public'
+                                    ? 'Pubblico'
+                                    : group.visibility === 'closed'
+                                    ? 'Chiuso'
+                                    : 'Privato'}
+                                </span>
+                              </div>
+                              {group.description && (
+                                <p className="text-xs text-slate-300">
+                                  {group.description}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Stella preferito */}
+                            <button
+                              type="button"
+                              onClick={() => toggleFavorite(group.id)}
+                              className="p-1 rounded-full hover:bg-slate-900"
+                              title={
+                                isFavorite
+                                  ? 'Rimuovi dai preferiti'
+                                  : 'Aggiungi ai preferiti'
+                              }
                             >
-                              {group.name}
-                            </Link>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-300">
-                              {group.visibility === 'public'
-                                ? 'Pubblico'
-                                : group.visibility === 'closed'
-                                ? 'Chiuso'
-                                : 'Privato'}
-                            </span>
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill={isFavorite ? 'currentColor' : 'none'}
+                                className={`w-5 h-5 ${
+                                  isFavorite
+                                    ? 'text-amber-400'
+                                    : 'text-slate-400'
+                                }`}
+                              >
+                                <path
+                                  stroke="currentColor"
+                                  strokeWidth="1.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M11.48 3.499a.75.75 0 011.04 0l2.12 2.063a.75.75 0 00.564.219l2.94-.178a.75.75 0 01.79.79l-.178 2.94a.75.75 0 00.219.564l2.063 2.12a.75.75 0 010 1.04l-2.063 2.12a.75.75 0 00-.219.564l.178 2.94a.75.75 0 01-.79.79l-2.94-.178a.75.75 0 00-.564.219l-2.12 2.063a.75.75 0 01-1.04 0l-2.12-2.063a.75.75 0 00-.564-.219l-2.94.178a.75.75 0 01-.79-.79l.178-2.94a.75.75 0 00-.219-.564l-2.063-2.12a.75.75 0 010-1.04l2.063-2.12a.75.75 0 00.219-.564l-.178-2.94a.75.75 0 01.79-.79l2.94.178a.75.75 0 00.564-.219l2.12-2.063z"
+                                />
+                              </svg>
+                            </button>
                           </div>
-                          {group.description && (
-                            <p className="text-xs text-slate-300">
-                              {group.description}
-                            </p>
-                          )}
+
                           <div className="flex items-center justify-between text-[11px] text-slate-400">
                             <span>
                               {isOwner
@@ -396,20 +525,33 @@ export default function GroupsPage() {
 
             {tab === 'explore' && (
               <>
-                <h2 className="text-sm font-semibold mb-3">
-                  Gruppi pubblici/chiusi
-                </h2>
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <h2 className="text-sm font-semibold">
+                    Gruppi pubblici/chiusi
+                  </h2>
+                  {exploreGroups.length > 0 && (
+                    <input
+                      type="text"
+                      value={exploreSearch}
+                      onChange={e => setExploreSearch(e.target.value)}
+                      placeholder="Cerca gruppi..."
+                      className="px-2 py-1 rounded-full bg-slate-950 border border-slate-700 text-[11px] focus:outline-none focus:ring focus:ring-slate-500"
+                    />
+                  )}
+                </div>
                 {loadingGroups ? (
                   <p className="text-xs text-slate-300">
                     Carico i gruppi...
                   </p>
-                ) : exploreGroups.length === 0 ? (
+                ) : visibleExploreGroups.length === 0 ? (
                   <p className="text-xs text-slate-400">
-                    Nessun gruppo disponibile da esplorare al momento.
+                    {exploreGroups.length === 0
+                      ? 'Nessun gruppo disponibile da esplorare al momento.'
+                      : 'Nessun gruppo corrisponde alla ricerca.'}
                   </p>
                 ) : (
                   <div className="space-y-3 text-sm">
-                    {exploreGroups.map(group => (
+                    {visibleExploreGroups.map(group => (
                       <div
                         key={group.id}
                         className="border border-slate-700 rounded-xl p-3 flex flex-col gap-2"
@@ -485,7 +627,10 @@ export default function GroupsPage() {
                       value={newVisibility}
                       onChange={e =>
                         setNewVisibility(
-                          e.target.value as 'public' | 'closed' | 'private'
+                          e.target.value as
+                            | 'public'
+                            | 'closed'
+                            | 'private'
                         )
                       }
                       className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:ring focus:ring-slate-500"
@@ -537,6 +682,10 @@ export default function GroupsPage() {
               Entrando in un gruppo, comparirai nella classifica del gruppo
               (pagina di dettaglio), basata sulle pizze che hai mangiato
               nell&apos;anno.
+            </p>
+            <p className="text-xs text-slate-400 mt-2">
+              Puoi contrassegnare i tuoi gruppi preferiti con la stellina ⭐:
+              verranno mostrati sempre in cima alla lista.
             </p>
           </div>
         </div>

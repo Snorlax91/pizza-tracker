@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
@@ -43,8 +43,9 @@ type LeaderboardRow = {
   isMe: boolean;
 };
 
+type LeaderboardViewMode = 'aroundMe' | 'top' | 'search';
+
 const CURRENT_YEAR = new Date().getFullYear();
-const LEADERBOARD_PAGE_SIZE = 10;
 
 export default function GroupDetailPage() {
   const router = useRouter();
@@ -64,7 +65,12 @@ export default function GroupDetailPage() {
   const [year, setYear] = useState(CURRENT_YEAR);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
-  const [leaderboardPage, setLeaderboardPage] = useState(0);
+
+  // vista classifica
+  const [viewMode, setViewMode] = useState<LeaderboardViewMode>('aroundMe');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResultIndex, setSearchResultIndex] = useState<number | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   // inviti / aggiunta membri
   const [inviteQuery, setInviteQuery] = useState('');
@@ -204,7 +210,6 @@ export default function GroupDetailPage() {
         const ids = Array.from(participants);
         if (ids.length === 0) {
           setLeaderboard([]);
-          setLeaderboardPage(0);
           return;
         }
 
@@ -255,7 +260,10 @@ export default function GroupDetailPage() {
         rows.sort((a, b) => b.total - a.total);
 
         setLeaderboard(rows);
-        setLeaderboardPage(0);
+        // reset vista quando cambiamo anno / gruppo
+        setViewMode('aroundMe');
+        setSearchResultIndex(null);
+        setSearchError(null);
       } catch (err: any) {
         console.error(err);
         setErrorMsg(err.message ?? 'Errore nel calcolo della classifica.');
@@ -268,6 +276,92 @@ export default function GroupDetailPage() {
       loadLeaderboard();
     }
   }, [group, members, year, profilesMap, user]);
+
+  // indice del mio utente in classifica
+  const myIndex = useMemo(() => {
+    if (!user) return -1;
+    return leaderboard.findIndex(row => row.userId === user.id);
+  }, [leaderboard, user]);
+
+  // gestione della ricerca nella classifica
+  const handleLeaderboardSearch = () => {
+    setSearchError(null);
+
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) {
+      // se il campo è vuoto, torno alla vista "intorno a me"
+      setSearchResultIndex(null);
+      setViewMode('aroundMe');
+      return;
+    }
+
+    const idx = leaderboard.findIndex(row => {
+      const p = row.profile;
+      const username = p?.username?.toLowerCase() || '';
+      const dn = p?.display_name?.toLowerCase() || '';
+      return username.includes(q) || dn.includes(q);
+    });
+
+    if (idx === -1) {
+      setSearchResultIndex(null);
+      setSearchError(
+        'Nessun utente trovato in classifica con questo nome.'
+      );
+      return;
+    }
+
+    setSearchResultIndex(idx);
+    setViewMode('search');
+  };
+
+  // finestra della classifica da mostrare
+  const displayedLeaderboard = useMemo(() => {
+    if (leaderboard.length === 0) return [];
+
+    // finestra di 5 sopra e 5 sotto
+    const windowSize = 5;
+
+    if (viewMode === 'top') {
+      return leaderboard.slice(0, 10);
+    }
+
+    const index =
+      viewMode === 'aroundMe'
+        ? myIndex
+        : viewMode === 'search'
+        ? searchResultIndex ?? -1
+        : -1;
+
+    if (index === -1) {
+      // se non trovo me stesso o il risultato, fallback su top 10
+      return leaderboard.slice(0, 10);
+    }
+
+    const start = Math.max(0, index - windowSize);
+    const end = Math.min(leaderboard.length, index + windowSize + 1);
+    return leaderboard.slice(start, end);
+  }, [leaderboard, myIndex, viewMode, searchResultIndex]);
+
+  const displayedRangeInfo = useMemo(() => {
+    if (leaderboard.length === 0 || displayedLeaderboard.length === 0)
+      return null;
+
+    const firstIndex = leaderboard.findIndex(
+      r => r.userId === displayedLeaderboard[0].userId
+    );
+    const lastIndex = leaderboard.findIndex(
+      r =>
+        r.userId ===
+        displayedLeaderboard[displayedLeaderboard.length - 1].userId
+    );
+
+    if (firstIndex === -1 || lastIndex === -1) return null;
+
+    return {
+      startPos: firstIndex + 1,
+      endPos: lastIndex + 1,
+    };
+  }, [leaderboard, displayedLeaderboard]);
 
   // cerca profili da invitare / aggiungere
   const handleSearchInvite = async () => {
@@ -431,14 +525,6 @@ export default function GroupDetailPage() {
     return p?.display_name || p?.username || id;
   };
 
-  // leaderboard paginata: mostriamo solo i primi N * (page + 1)
-  const displayedLeaderboard = leaderboard.slice(
-    0,
-    (leaderboardPage + 1) * LEADERBOARD_PAGE_SIZE
-  );
-  const leaderboardHasMore =
-    displayedLeaderboard.length < leaderboard.length;
-
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       <AppHeader />
@@ -513,27 +599,100 @@ export default function GroupDetailPage() {
 
           {/* Classifica */}
           <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4 flex flex-col gap-3 md:col-span-2">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">
-                Classifica del gruppo
-              </h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setYear(y => y - 1)}
-                  className="px-2 py-1 rounded-full border border-slate-700 text-[11px] hover:bg-slate-900"
-                >
-                  ◀
-                </button>
-                <span className="text-xs text-slate-300">
-                  {year}
-                </span>
-                <button
-                  onClick={() => setYear(y => y + 1)}
-                  className="px-2 py-1 rounded-full border border-slate-700 text-[11px] hover:bg-slate-900"
-                >
-                  ▶
-                </button>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">
+                  Classifica del gruppo
+                </h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setYear(y => y - 1)}
+                    className="px-2 py-1 rounded-full border border-slate-700 text-[11px] hover:bg-slate-900"
+                  >
+                    ◀
+                  </button>
+                  <span className="text-xs text-slate-300">
+                    {year}
+                  </span>
+                  <button
+                    onClick={() => setYear(y => y + 1)}
+                    className="px-2 py-1 rounded-full border border-slate-700 text-[11px] hover:bg-slate-900"
+                  >
+                    ▶
+                  </button>
+                </div>
               </div>
+
+              {/* Controlli vista + ricerca */}
+              <div className="flex flex-wrap items-center gap-2 justify-between text-[11px]">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('aroundMe');
+                      setSearchResultIndex(null);
+                      setSearchError(null);
+                    }}
+                    className={`px-3 py-1 rounded-full border text-[11px] ${
+                      viewMode === 'aroundMe'
+                        ? 'bg-slate-900 border-amber-300/70 text-amber-200'
+                        : 'border-slate-700 text-slate-200 hover:bg-slate-900'
+                    }`}
+                  >
+                    Intorno a me
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('top');
+                      setSearchResultIndex(null);
+                      setSearchError(null);
+                    }}
+                    className={`px-3 py-1 rounded-full border text-[11px] ${
+                      viewMode === 'top'
+                        ? 'bg-slate-900 border-amber-300/70 text-amber-200'
+                        : 'border-slate-700 text-slate-200 hover:bg-slate-900'
+                    }`}
+                  >
+                    Top 10
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Cerca utente in classifica..."
+                    className="px-2 py-1 rounded-full bg-slate-950 border border-slate-700 text-[11px] focus:outline-none focus:ring focus:ring-slate-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleLeaderboardSearch}
+                    className="px-3 py-1 rounded-full border border-slate-700 text-[11px] hover:bg-slate-900"
+                  >
+                    Vai
+                  </button>
+                </div>
+              </div>
+
+              {searchError && (
+                <p className="text-[11px] text-red-400">{searchError}</p>
+              )}
+
+              {leaderboard.length > 0 && displayedRangeInfo && (
+                <p className="text-[11px] text-slate-400">
+                  Stai vedendo le posizioni{' '}
+                  <span className="font-semibold">
+                    #{displayedRangeInfo.startPos}
+                  </span>{' '}
+                  -{' '}
+                  <span className="font-semibold">
+                    #{displayedRangeInfo.endPos}
+                  </span>{' '}
+                  su {leaderboard.length} membri.
+                </p>
+              )}
             </div>
 
             {leaderboardLoading ? (
@@ -546,74 +705,63 @@ export default function GroupDetailPage() {
                 iniziano a registrare pizze, compariranno qui.
               </p>
             ) : (
-              <>
-                <ul className="space-y-2 text-sm">
-                  {displayedLeaderboard.map((row, index) => {
-                    const profile = row.profile;
-                    const username = profile?.username ?? null;
-                    const label =
-                      profile?.display_name ||
-                      profile?.username ||
-                      row.userId;
+              <ul className="space-y-2 text-sm">
+                {displayedLeaderboard.map(row => {
+                  const profile = row.profile;
+                  const username = profile?.username ?? null;
+                  const label =
+                    profile?.display_name ||
+                    profile?.username ||
+                    row.userId;
 
-                    return (
-                      <li
-                        key={row.userId}
-                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl ${
-                          row.isMe
-                            ? 'bg-amber-400/10 border border-amber-300/60'
-                            : 'bg-slate-900/60 border border-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs w-4 text-slate-400">
-                            {index + 1}.
-                          </span>
-                          <span className="text-sm">
-                            {username ? (
-                              <Link
-                                href={`/u/${username}`}
-                                className="hover:underline"
-                              >
-                                {label}
-                              </Link>
-                            ) : (
-                              label
-                            )}
-                            {row.isMe && (
-                              <span className="ml-1 text-[10px] text-amber-300">
-                                (tu)
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-semibold">
-                            {row.total} pizze
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            {row.baseCount} di partenza + {row.pizzaCount} qui
-                          </p>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                  const globalIndex =
+                    leaderboard.findIndex(
+                      r => r.userId === row.userId
+                    ) + 1; // 1-based
 
-                {leaderboardHasMore && (
-                  <div className="mt-3 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLeaderboardPage(p => p + 1)
-                      }
-                      className="text-xs px-4 py-1.5 rounded-full border border-slate-700 hover:bg-slate-900"
+                  return (
+                    <li
+                      key={row.userId}
+                      className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl ${
+                        row.isMe
+                          ? 'bg-amber-400/10 border border-amber-300/60'
+                          : 'bg-slate-900/60 border border-slate-700'
+                      }`}
                     >
-                      Mostra altri
-                    </button>
-                  </div>
-                )}
-              </>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs w-6 text-slate-400">
+                          #{globalIndex}
+                        </span>
+                        <span className="text-sm">
+                          {username ? (
+                            <Link
+                              href={`/u/${username}`}
+                              className="hover:underline"
+                            >
+                              {label}
+                            </Link>
+                          ) : (
+                            label
+                          )}
+                          {row.isMe && (
+                            <span className="ml-1 text-[10px] text-amber-300">
+                              (tu)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">
+                          {row.total} pizze
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          {row.baseCount} di partenza + {row.pizzaCount} qui
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
         </div>
