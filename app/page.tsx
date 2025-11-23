@@ -227,7 +227,7 @@ function IngredientStatCard({
               {getIngredientEmoji(highlight.name)}
             </span>
             <Link
-              href={`/ingredients/${highlight.ingredientId}`}
+              href={`/stats/ingredients/${highlight.ingredientId}`}
               className="text-sm font-semibold text-slate-50 hover:underline"
             >
               {highlight.name}
