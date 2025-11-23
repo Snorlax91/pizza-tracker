@@ -13,6 +13,11 @@ type IngredientStat = {
     avgRating: number | null;
 };
 
+type CombinationStat = {
+    ingredients: Array<{ id: number; name: string }>;
+    count: number;
+};
+
 type PizzaOriginFilter =
     | 'all'
     | 'takeaway'
@@ -279,6 +284,7 @@ export default function GlobalStatsPage() {
         topUsersByWeekday,
         topUsersByDistinct,
         topIngredientsByWeekday,
+        topCombinations,
     } = useMemo(() => {
         // Ingredienti: conteggio + voto medio
         let topByCount: IngredientStat[] = [];
@@ -330,11 +336,56 @@ export default function GlobalStatsPage() {
                 .slice(0, 10);
         }
 
+        // Calcolo delle combinazioni di ingredienti più usate
+        let topCombinations: CombinationStat[] = [];
+        if (rows && rows.length > 0) {
+            // Raggruppa ingredienti per pizza_id
+            const pizzaIngredientsMap: Record<number, Array<{ id: number; name: string }>> = {};
+            
+            rows.forEach(row => {
+                if (!row.pizza_id || !row.ingredient_id || !row.ingredient_name) return;
+                if (!pizzaIngredientsMap[row.pizza_id]) {
+                    pizzaIngredientsMap[row.pizza_id] = [];
+                }
+                // Evita duplicati nello stesso array
+                const exists = pizzaIngredientsMap[row.pizza_id].some(ing => ing.id === row.ingredient_id);
+                if (!exists) {
+                    pizzaIngredientsMap[row.pizza_id].push({
+                        id: row.ingredient_id,
+                        name: row.ingredient_name,
+                    });
+                }
+            });
+
+            // Conta le combinazioni (ordinando gli ID per consistenza)
+            const combinationCounts: Map<string, { ingredients: Array<{ id: number; name: string }>; count: number }> = new Map();
+
+            Object.values(pizzaIngredientsMap).forEach(ingredients => {
+                if (ingredients.length < 2) return; // Ignora pizze con meno di 2 ingredienti
+                
+                // Ordina per ID per avere una chiave consistente
+                const sorted = [...ingredients].sort((a, b) => a.id - b.id);
+                const key = sorted.map(ing => ing.id).join(',');
+                
+                if (!combinationCounts.has(key)) {
+                    combinationCounts.set(key, { ingredients: sorted, count: 0 });
+                }
+                combinationCounts.get(key)!.count += 1;
+            });
+
+            // Converti in array e ordina per conteggio
+            topCombinations = Array.from(combinationCounts.values())
+                .filter(combo => combo.count >= 2) // Solo combinazioni usate almeno 2 volte
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 10);
+        }
+
         // Se non ci sono pizze nel periodo
         if (!pizzasPeriod || pizzasPeriod.length === 0) {
             return {
                 topByCount,
                 topByRating,
+                topCombinations,
                 weekdaySeries: Array(7).fill(0) as number[],
                 weekdayMax: 0,
                 pieSeries: [] as { label: string; value: number }[],
@@ -575,6 +626,7 @@ export default function GlobalStatsPage() {
         return {
             topByCount,
             topByRating,
+            topCombinations,
             weekdaySeries,
             weekdayMax,
             pieSeries,
@@ -935,6 +987,65 @@ export default function GlobalStatsPage() {
                                                     </div>
                                                     <span className="text-slate-300">
                                                         {ing.count} pizze
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+
+                                {/* Top combinazioni di ingredienti */}
+                                <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h3 className="text-sm font-semibold">
+                                            Top 10 combinazioni di ingredienti
+                                        </h3>
+                                        <button
+                                            onClick={() => router.push('/stats/ingredients/top-combinations')}
+                                            className="text-[11px] px-2 py-1 rounded-full border border-slate-600 hover:bg-slate-900"
+                                        >
+                                            Vedi dettaglio
+                                        </button>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 mb-2">
+                                        Le combinazioni di ingredienti più frequenti nelle pizze (min. 2 ingredienti).
+                                    </p>
+                                    {topCombinations.length === 0 ? (
+                                        <p className="text-xs text-slate-400">
+                                            Nessuna combinazione trovata per questo periodo.
+                                        </p>
+                                    ) : (
+                                        <ul className="space-y-1.5 text-xs">
+                                            {topCombinations.map((combo, idx) => (
+                                                <li
+                                                    key={idx}
+                                                    className="flex items-center justify-between gap-2"
+                                                >
+                                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                        <span className="w-4 text-slate-500 flex-shrink-0">
+                                                            {idx + 1}.
+                                                        </span>
+                                                        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                                            {combo.ingredients.map((ing, ingIdx) => (
+                                                                <span key={ing.id} className="flex items-center gap-1 min-w-0">
+                                                                    {ingIdx > 0 && (
+                                                                        <span className="text-slate-500">+</span>
+                                                                    )}
+                                                                    <Link
+                                                                        href={`/stats/ingredients/${ing.id}`}
+                                                                        className="flex items-center gap-1 text-slate-100 hover:underline"
+                                                                    >
+                                                                        <span className="text-base">
+                                                                            {getIngredientEmoji(ing.name)}
+                                                                        </span>
+                                                                        <span className="truncate">{ing.name}</span>
+                                                                    </Link>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-slate-300 flex-shrink-0">
+                                                        {combo.count} pizze
                                                     </span>
                                                 </li>
                                             ))}
