@@ -32,6 +32,19 @@ type Highlight = {
   rank: number;
 };
 
+type IngredientMomentHighlight = {
+  ingredientId: number;
+  name: string;
+  count: number;
+};
+
+type IngredientMoments = {
+  prevMonth: IngredientMomentHighlight | null;
+  currentMonth: IngredientMomentHighlight | null;
+  prevWeek: IngredientMomentHighlight | null;
+  currentWeek: IngredientMomentHighlight | null;
+};
+
 const MONTH_LABELS = [
   'Gennaio',
   'Febbraio',
@@ -46,7 +59,6 @@ const MONTH_LABELS = [
   'Novembre',
   'Dicembre',
 ];
-
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -128,6 +140,72 @@ function useYearlyPizzaStats(userId?: string) {
   };
 }
 
+function IngredientHighlightsBox({ data }: { data: IngredientMoments }) {
+  const hasAny =
+    data.prevMonth || data.currentMonth || data.prevWeek || data.currentWeek;
+
+  return (
+    <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 flex flex-col gap-2">
+      <h2 className="text-xs font-semibold text-slate-100">
+        Ingredienti del momento
+      </h2>
+      {hasAny ? (
+        <div className="grid grid-cols-1 gap-2 text-[11px]">
+          <IngredientHighlightRow
+            label="Mese scorso"
+            highlight={data.prevMonth}
+          />
+          <IngredientHighlightRow
+            label="Mese corrente"
+            highlight={data.currentMonth}
+          />
+          <IngredientHighlightRow
+            label="Settimana scorsa"
+            highlight={data.prevWeek}
+          />
+          <IngredientHighlightRow
+            label="Settimana corrente"
+            highlight={data.currentWeek}
+          />
+        </div>
+      ) : (
+        <p className="text-[11px] text-slate-500">
+          Ancora nessun ingrediente “preferito” recente.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function IngredientHighlightRow({
+  label,
+  highlight,
+}: {
+  label: string;
+  highlight: IngredientMomentHighlight | null;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-slate-400">{label}</span>
+      {highlight ? (
+        <div className="flex items-center gap-2">
+          {/* In futuro qui possiamo aggiungere un’emoji in base all’ingrediente */}
+          <span className="text-slate-100 font-medium">
+            {highlight.name}
+          </span>
+          <span className="text-[10px] text-slate-500">
+            {highlight.count} pizze
+          </span>
+        </div>
+      ) : (
+        <span className="text-[10px] text-slate-500">
+          Nessun dato
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -164,6 +242,14 @@ export default function Home() {
   const [savingInitialCount, setSavingInitialCount] = useState(false);
 
   const total = baseCount + pizzaCount;
+
+  const [ingredientMoments, setIngredientMoments] = useState<IngredientMoments>({
+    prevMonth: null,
+    currentMonth: null,
+    prevWeek: null,
+    currentWeek: null,
+  });
+  const [loadingIngredientMoments, setLoadingIngredientMoments] = useState(false);
 
   // Carica utente + profilo + gestisce onboarding
   useEffect(() => {
@@ -212,6 +298,7 @@ export default function Home() {
     loadUserAndProfile();
   }, [router]);
 
+  // Highlight globali (posizione anno/mese, top ingredient dell’anno ecc.)
   useEffect(() => {
     const loadHighlights = async () => {
       if (!user?.id) return;
@@ -415,6 +502,148 @@ export default function Home() {
     loadHighlights();
   }, [user?.id]);
 
+  // Ingredienti del momento (mese scorso / mese corrente / settimana scorsa / settimana corrente)
+  useEffect(() => {
+    const loadIngredientMoments = async () => {
+      if (!user?.id) return;
+      setLoadingIngredientMoments(true);
+
+      try {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+
+        // Mese corrente
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+        // Mese precedente
+        const prevMonthIndex = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+        const prevMonthYear =
+          now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+        const prevMonthStart = new Date(prevMonthYear, prevMonthIndex, 1);
+        const prevMonthEnd = new Date(
+          prevMonthYear,
+          prevMonthIndex + 1,
+          1
+        );
+
+        // Settimana corrente (lunedì)
+        const currentWeekStart = new Date(now);
+        const day = currentWeekStart.getDay(); // 0=dom,...6=sab
+        const diffToMonday = (day + 6) % 7; // 0->6,1->0,...
+        currentWeekStart.setDate(currentWeekStart.getDate() - diffToMonday);
+        currentWeekStart.setHours(0, 0, 0, 0);
+
+        // Settimana scorsa
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+        const prevWeekEnd = new Date(currentWeekStart); // esclusivo
+
+        // prendiamo all’indietro 90 giorni
+        const ninetyDaysAgo = new Date(now);
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+        const { data, error } = await supabase
+          .from('pizza_ingredients')
+          .select(
+            `
+            ingredient_id,
+            ingredients ( id, name ),
+            pizzas!inner (
+              eaten_at,
+              user_id
+            )
+          `
+          )
+          .eq('pizzas.user_id', user.id)
+          .gte('pizzas.eaten_at', ninetyDaysAgo.toISOString());
+
+        if (error) throw error;
+
+        const prevMonthCounts: Record<number, { name: string; count: number }> = {};
+        const currentMonthCounts: Record<number, { name: string; count: number }> = {};
+        const prevWeekCounts: Record<number, { name: string; count: number }> = {};
+        const currentWeekCounts: Record<number, { name: string; count: number }> = {};
+
+        const isBoringIngredient = (name: string | undefined | null) => {
+          if (!name) return true;
+          const n = name.toLowerCase().trim();
+          return n === 'pomodoro' || n === 'mozzarella';
+        };
+
+        (data ?? []).forEach((row: any) => {
+          const ingId = row.ingredient_id as number;
+          const ingName = row.ingredients?.name as string | undefined;
+          const eaten_at = row.pizzas?.eaten_at as string | null;
+
+          if (!ingId || !ingName || !eaten_at) return;
+          if (isBoringIngredient(ingName)) return;
+
+          const d = new Date(eaten_at);
+          if (Number.isNaN(d.getTime())) return;
+
+          // mese precedente
+          if (d >= prevMonthStart && d < prevMonthEnd) {
+            if (!prevMonthCounts[ingId]) {
+              prevMonthCounts[ingId] = { name: ingName, count: 0 };
+            }
+            prevMonthCounts[ingId].count += 1;
+          }
+
+          // mese corrente
+          if (d >= currentMonthStart && d < currentMonthEnd) {
+            if (!currentMonthCounts[ingId]) {
+              currentMonthCounts[ingId] = { name: ingName, count: 0 };
+            }
+            currentMonthCounts[ingId].count += 1;
+          }
+
+          // settimana scorsa
+          if (d >= prevWeekStart && d < prevWeekEnd) {
+            if (!prevWeekCounts[ingId]) {
+              prevWeekCounts[ingId] = { name: ingName, count: 0 };
+            }
+            prevWeekCounts[ingId].count += 1;
+          }
+
+          // settimana corrente
+          if (d >= currentWeekStart && d <= now) {
+            if (!currentWeekCounts[ingId]) {
+              currentWeekCounts[ingId] = { name: ingName, count: 0 };
+            }
+            currentWeekCounts[ingId].count += 1;
+          }
+        });
+
+        const pickTop = (
+          map: Record<number, { name: string; count: number }>
+        ): IngredientMomentHighlight | null => {
+          const entries = Object.entries(map);
+          if (entries.length === 0) return null;
+          const [idStr, val] = entries.sort((a, b) => b[1].count - a[1].count)[0];
+          return {
+            ingredientId: Number(idStr),
+            name: val.name,
+            count: val.count,
+          };
+        };
+
+        setIngredientMoments({
+          prevMonth: pickTop(prevMonthCounts),
+          currentMonth: pickTop(currentMonthCounts),
+          prevWeek: pickTop(prevWeekCounts),
+          currentWeek: pickTop(currentWeekCounts),
+        });
+      } catch (err) {
+        console.error('Errore nel calcolo degli ingredienti del momento', err);
+      } finally {
+        setLoadingIngredientMoments(false);
+      }
+    };
+
+    loadIngredientMoments();
+  }, [user?.id]);
+
   const handleUndoLastPizza = async () => {
     if (!user) return;
     setUndoLoading(true);
@@ -571,14 +800,15 @@ export default function Home() {
               {/* ANNO */}
               <div className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${yearRank?.rank === 1
-                    ? 'bg-yellow-400 text-slate-900'
-                    : yearRank?.rank === 2
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    yearRank?.rank === 1
+                      ? 'bg-yellow-400 text-slate-900'
+                      : yearRank?.rank === 2
                       ? 'bg-slate-300 text-slate-900'
                       : yearRank?.rank === 3
-                        ? 'bg-amber-700 text-slate-50'
-                        : 'bg-slate-700 text-slate-100'
-                    }`}
+                      ? 'bg-amber-700 text-slate-50'
+                      : 'bg-slate-700 text-slate-100'
+                  }`}
                 >
                   {yearRank?.rank ? `#${yearRank.rank}` : 'N/D'}
                 </span>
@@ -601,14 +831,15 @@ export default function Home() {
               {/* MESE */}
               <div className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${monthRank?.rank === 1
-                    ? 'bg-yellow-400 text-slate-900'
-                    : monthRank?.rank === 2
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    monthRank?.rank === 1
+                      ? 'bg-yellow-400 text-slate-900'
+                      : monthRank?.rank === 2
                       ? 'bg-slate-300 text-slate-900'
                       : monthRank?.rank === 3
-                        ? 'bg-amber-700 text-slate-50'
-                        : 'bg-slate-700 text-slate-100'
-                    }`}
+                      ? 'bg-amber-700 text-slate-50'
+                      : 'bg-slate-700 text-slate-100'
+                  }`}
                 >
                   {monthRank?.rank ? `#${monthRank.rank}` : 'N/D'}
                 </span>
@@ -641,22 +872,23 @@ export default function Home() {
                     className="px-3 py-1.5 rounded-full border flex items-center gap-2 bg-slate-800/80 border-slate-700"
                   >
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${h.rank === 1
-                        ? 'bg-yellow-400 text-slate-900'
-                        : h.rank === 2
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        h.rank === 1
+                          ? 'bg-yellow-400 text-slate-900'
+                          : h.rank === 2
                           ? 'bg-slate-300 text-slate-900'
                           : h.rank === 3
-                            ? 'bg-amber-700 text-slate-50'
-                            : 'bg-slate-700 text-slate-100'
-                        }`}
+                          ? 'bg-amber-700 text-slate-50'
+                          : 'bg-slate-700 text-slate-100'
+                      }`}
                     >
                       {h.rank === 1
                         ? '🥇'
                         : h.rank === 2
-                          ? '🥈'
-                          : h.rank === 3
-                            ? '🥉'
-                            : `#${h.rank}`}
+                        ? '🥈'
+                        : h.rank === 3
+                        ? '🥉'
+                        : `#${h.rank}`}
                     </span>
                     <div className="flex flex-col">
                       <span className="text-slate-50 font-semibold">
@@ -674,108 +906,144 @@ export default function Home() {
         )}
       </section>
 
-
-      <div className="flex-1 flex items-center justify-center px-4">
-        <div className="max-w-md w-full">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <button
-              onClick={() => setYear(y => y - 1)}
-              className="px-3 py-1 rounded-full border border-slate-700 text-sm hover:bg-slate-800"
-            >
-              ◀
-            </button>
-            <span className="text-sm text-slate-300">
-              Pizze dell&apos;anno{' '}
-              <span className="font-semibold text-slate-50">{year}</span>
-            </span>
-            <button
-              onClick={() => setYear(y => y + 1)}
-              className="px-3 py-1 rounded-full border border-slate-700 text-sm hover:bg-slate-800"
-            >
-              ▶
-            </button>
+      {/* Contenuto centrale + ingredienti del momento */}
+      <div className="flex-1 px-4 py-4 flex justify-center">
+        <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 items-start">
+          {/* Colonna sinistra (desktop): ingredienti del momento */}
+          <div className="hidden md:flex flex-col gap-4">
+            {loadingIngredientMoments ? (
+              <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 text-[11px] text-slate-400">
+                Carico i tuoi ingredienti del momento...
+              </div>
+            ) : (
+              <IngredientHighlightsBox data={ingredientMoments} />
+            )}
           </div>
 
-          <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-5 mb-4">
-            <p className="text-sm text-slate-400 mb-1">
-              Pizze mangiate nel {year}
-            </p>
-            <p className="text-5xl font-black mb-2">
-              {loadingCounter ? '...' : total}
-            </p>
-            <p className="text-xs text-slate-400">
-              Di cui {baseCount} già mangiate prima di usare l’app e{' '}
-              {pizzaCount} registrate qui.
-            </p>
-          </div>
+          {/* Colonna principale (counter) */}
+          <div className="flex flex-col items-center">
+            <div className="w-full max-w-md">
+              {/* Versione mobile: ingredienti del momento collassabili sopra al counter */}
+              <div className="md:hidden mb-3 w-full">
+                <details className="bg-slate-800/70 border border-slate-700 rounded-2xl">
+                  <summary className="px-3 py-2 text-xs font-semibold cursor-pointer list-none flex items-center justify-between">
+                    <span>Ingredienti del momento</span>
+                    <span className="text-[10px] text-slate-400">
+                      tocca per aprire
+                    </span>
+                  </summary>
+                  <div className="px-3 pb-3 pt-1">
+                    {loadingIngredientMoments ? (
+                      <p className="text-[11px] text-slate-400">
+                        Carico i tuoi ingredienti del momento...
+                      </p>
+                    ) : (
+                      <IngredientHighlightsBox data={ingredientMoments} />
+                    )}
+                  </div>
+                </details>
+              </div>
 
-          {errorMsg && (
-            <p className="mb-3 text-sm text-red-400">{errorMsg}</p>
-          )}
-
-          <button
-            onClick={handleAddPizza}
-            disabled={adding || loadingCounter}
-            className="w-full py-4 rounded-2xl bg-amber-400 text-slate-900 font-bold text-xl shadow-lg shadow-amber-500/30 hover:bg-amber-300 transition disabled:opacity-60 disabled:cursor-not-allowed mb-3"
-          >
-            {adding ? 'Aggiungo...' : '+1 Pizza'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleUndoLastPizza}
-            disabled={undoLoading || loadingCounter}
-            className="mt-1 w-full py-2 rounded-xl text-xs border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
-          >
-            {undoLoading ? 'Annullo...' : 'Annulla ultima pizza'}
-          </button>
-
-
-          {showInitialSetup && (
-            <div className="mt-4 bg-slate-800/70 border border-amber-500/60 rounded-2xl p-4">
-              <p className="text-sm font-semibold mb-2">
-                Partenza veloce per il {year}
-              </p>
-              <p className="text-xs text-slate-300 mb-3">
-                Quante pizze avevi già mangiato nel {year} prima di usare
-                Pizza Tracker? Questo numero verrà aggiunto al conteggio.
-              </p>
-              <div className="flex items-center gap-3 mb-3">
-                <input
-                  type="number"
-                  min={0}
-                  value={initialCountInput}
-                  onChange={e =>
-                    setInitialCountInput(
-                      Number.isNaN(parseInt(e.target.value))
-                        ? 0
-                        : parseInt(e.target.value, 10)
-                    )
-                  }
-                  className="w-24 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring focus:ring-slate-500"
-                />
+              <div className="flex items-center justify-center gap-3 mb-4">
                 <button
-                  type="button"
-                  onClick={handleSaveInitialCount}
-                  disabled={savingInitialCount}
-                  className="px-4 py-2 rounded-xl bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                  onClick={() => setYear(y => y - 1)}
+                  className="px-3 py-1 rounded-full border border-slate-700 text-sm hover:bg-slate-800"
                 >
-                  {savingInitialCount ? 'Salvo...' : 'Imposta'}
+                  ◀
+                </button>
+                <span className="text-sm text-slate-300">
+                  Pizze dell&apos;anno{' '}
+                  <span className="font-semibold text-slate-50">{year}</span>
+                </span>
+                <button
+                  onClick={() => setYear(y => y + 1)}
+                  className="px-3 py-1 rounded-full border border-slate-700 text-sm hover:bg-slate-800"
+                >
+                  ▶
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400">
-                Puoi lasciare 0 se vuoi partire da zero e usare solo il bottone
-                +1.
-              </p>
-            </div>
-          )}
 
-          {!showInitialSetup && (
-            <p className="text-xs text-slate-500 text-center mt-2">
-              Dopo ogni +1 potrai aggiungere foto, ingredienti e dettagli
-              della pizza.
-            </p>
-          )}
+              <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-5 mb-4">
+                <p className="text-sm text-slate-400 mb-1">
+                  Pizze mangiate nel {year}
+                </p>
+                <p className="text-5xl font-black mb-2">
+                  {loadingCounter ? '...' : total}
+                </p>
+                <p className="text-xs text-slate-400">
+                  Di cui {baseCount} già mangiate prima di usare l’app e{' '}
+                  {pizzaCount} registrate qui.
+                </p>
+              </div>
+
+              {errorMsg && (
+                <p className="mb-3 text-sm text-red-400">{errorMsg}</p>
+              )}
+
+              <button
+                onClick={handleAddPizza}
+                disabled={adding || loadingCounter}
+                className="w-full py-4 rounded-2xl bg-amber-400 text-slate-900 font-bold text-xl shadow-lg shadow-amber-500/30 hover:bg-amber-300 transition disabled:opacity-60 disabled:cursor-not-allowed mb-3"
+              >
+                {adding ? 'Aggiungo...' : '+1 Pizza'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleUndoLastPizza}
+                disabled={undoLoading || loadingCounter}
+                className="mt-1 w-full py-2 rounded-xl text-xs border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50"
+              >
+                {undoLoading ? 'Annullo...' : 'Annulla ultima pizza'}
+              </button>
+
+              {showInitialSetup && (
+                <div className="mt-4 bg-slate-800/70 border border-amber-500/60 rounded-2xl p-4">
+                  <p className="text-sm font-semibold mb-2">
+                    Partenza veloce per il {year}
+                  </p>
+                  <p className="text-xs text-slate-300 mb-3">
+                    Quante pizze avevi già mangiato nel {year} prima di usare
+                    Pizza Tracker? Questo numero verrà aggiunto al conteggio.
+                  </p>
+                  <div className="flex items-center gap-3 mb-3">
+                    <input
+                      type="number"
+                      min={0}
+                      value={initialCountInput}
+                      onChange={e =>
+                        setInitialCountInput(
+                          Number.isNaN(parseInt(e.target.value))
+                            ? 0
+                            : parseInt(e.target.value, 10)
+                        )
+                      }
+                      className="w-24 px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring focus:ring-slate-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveInitialCount}
+                      disabled={savingInitialCount}
+                      className="px-4 py-2 rounded-xl bg-amber-400 text-slate-900 text-sm font-semibold hover:bg-amber-300 transition disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {savingInitialCount ? 'Salvo...' : 'Imposta'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    Puoi lasciare 0 se vuoi partire da zero e usare solo il
+                    bottone +1.
+                  </p>
+                </div>
+              )}
+
+              {!showInitialSetup && (
+                <p className="text-xs text-slate-500 text-center mt-2">
+                  Dopo ogni +1 potrai aggiungere foto, ingredienti e dettagli
+                  della pizza.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
