@@ -51,7 +51,6 @@ type PizzaOrigin =
   | 'bar'
   | 'other';
 
-
 function containsBadWords(text: string): boolean {
   const lower = text.toLowerCase();
   return BANNED_WORDS.some(word => lower.includes(word));
@@ -70,6 +69,7 @@ export function PizzaDetailsPanel({
   const [name, setName] = useState('Pizza');
   const [date, setDate] = useState<string>('');
   const [rating, setRating] = useState<number | ''>('');
+  const [ratingError, setRatingError] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
@@ -81,11 +81,8 @@ export function PizzaDetailsPanel({
   const [searchingIngredients, setSearchingIngredients] = useState(false);
 
   const [userSuggestions, setUserSuggestions] = useState<Ingredient[]>([]);
-  const [globalSuggestions, setGlobalSuggestions] = useState<Ingredient[]>(
-    []
-  );
+  const [globalSuggestions, setGlobalSuggestions] = useState<Ingredient[]>([]);
   const [origin, setOrigin] = useState<PizzaOrigin>('');
-
 
   // Carica dettagli pizza + ingredienti selezionati + suggerimenti
   useEffect(() => {
@@ -100,7 +97,6 @@ export function PizzaDetailsPanel({
           .select('name, eaten_at, rating, notes, photo_url, origin')
           .eq('id', pizzaId)
           .maybeSingle();
-
 
         if (pizzaError) throw pizzaError;
         if (!pizza) throw new Error('Pizza non trovata');
@@ -353,7 +349,6 @@ export function PizzaDetailsPanel({
     }
   };
 
-
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -390,8 +385,15 @@ export function PizzaDetailsPanel({
   };
 
   const handleSave = async () => {
-    setSaving(true);
     setErrorMsg(null);
+
+    // 🔐 Validazione voto prima di salvare
+    if (rating !== '' && (typeof rating !== 'number' || rating < 0 || rating > 10)) {
+      setRatingError('Il voto deve essere un numero tra 0 e 10.');
+      return;
+    }
+
+    setSaving(true);
 
     try {
       const { error } = await supabase
@@ -406,13 +408,23 @@ export function PizzaDetailsPanel({
         })
         .eq('id', pizzaId);
 
-      if (error) throw error;
+      if (error) {
+        console.error(error);
+        // Messaggio più parlante nel caso di problemi col voto
+        setErrorMsg(
+          'Errore nel salvataggio della pizza. Controlla che il voto sia un numero tra 0 e 10.'
+        );
+        return;
+      }
 
       if (onUpdated) onUpdated();
       onClose();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message ?? 'Errore nel salvataggio della pizza.');
+      setErrorMsg(
+        err.message ??
+          'Errore nel salvataggio della pizza. Controlla che il voto sia un numero tra 0 e 10.'
+      );
     } finally {
       setSaving(false);
     }
@@ -496,7 +508,6 @@ export function PizzaDetailsPanel({
                     <input
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       onChange={handleFileChange}
                       className="hidden"
                     />
@@ -514,7 +525,6 @@ export function PizzaDetailsPanel({
 
                     {/* Pulsanti modifica/rimuovi - overlay */}
                     <div className="absolute top-2 right-2 flex gap-2">
-
                       {/* Cambia foto (matita) */}
                       <label
                         className="cursor-pointer bg-slate-900/70 backdrop-blur-sm p-2 rounded-full border border-slate-700 hover:bg-slate-800 transition"
@@ -537,7 +547,6 @@ export function PizzaDetailsPanel({
                         <input
                           type="file"
                           accept="image/*"
-                          capture="environment"
                           onChange={handleFileChange}
                           className="hidden"
                         />
@@ -580,12 +589,9 @@ export function PizzaDetailsPanel({
                 )}
               </div>
 
-
               {/* Nome */}
               <div className="space-y-1">
-                <label className="text-xs text-slate-300">
-                  Nome pizza
-                </label>
+                <label className="text-xs text-slate-300">Nome pizza</label>
                 <input
                   type="text"
                   value={name}
@@ -617,15 +623,42 @@ export function PizzaDetailsPanel({
                   value={rating}
                   onChange={e => {
                     const v = e.target.value;
+
                     if (v === '') {
                       setRating('');
-                    } else {
-                      const n = parseInt(v, 10);
-                      setRating(Number.isNaN(n) ? '' : n);
+                      setRatingError(null);
+                      return;
                     }
+
+                    const n = Number(v);
+
+                    if (Number.isNaN(n)) {
+                      // l'utente ha scritto qualcosa che non è un numero
+                      setRating('');
+                      setRatingError('Inserisci un numero tra 0 e 10.');
+                      return;
+                    }
+
+                    if (n < 0 || n > 10) {
+                      setRating(n);
+                      setRatingError('Il voto deve essere tra 0 e 10.');
+                      return;
+                    }
+
+                    setRating(n);
+                    setRatingError(null);
                   }}
-                  className="w-24 px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:ring focus:ring-slate-500"
+                  className={`w-24 px-3 py-2 rounded-lg bg-slate-950 border text-sm focus:outline-none focus:ring ${
+                    ratingError
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-slate-700 focus:ring-slate-500'
+                  }`}
                 />
+                {ratingError && (
+                  <p className="text-[11px] text-red-400 mt-1">
+                    {ratingError}
+                  </p>
+                )}
               </div>
 
               {/* Provenienza della pizza */}
@@ -648,12 +681,9 @@ export function PizzaDetailsPanel({
                 </select>
               </div>
 
-
               {/* Ingredienti */}
               <div className="space-y-2">
-                <label className="text-xs text-slate-300">
-                  Ingredienti
-                </label>
+                <label className="text-xs text-slate-300">Ingredienti</label>
                 <input
                   type="text"
                   placeholder="Cerca o scrivi un ingrediente e premi Invio..."
@@ -688,10 +718,11 @@ export function PizzaDetailsPanel({
                           key={ing.id}
                           type="button"
                           onClick={() => handleToggleIngredient(ing)}
-                          className={`px-3 py-1 rounded-full text-xs border ${selected
-                            ? 'bg-amber-400 text-slate-900 border-amber-300'
-                            : 'bg-slate-900 text-slate-100 border-slate-600'
-                            }`}
+                          className={`px-3 py-1 rounded-full text-xs border ${
+                            selected
+                              ? 'bg-amber-400 text-slate-900 border-amber-300'
+                              : 'bg-slate-900 text-slate-100 border-slate-600'
+                          }`}
                         >
                           {ing.name}
                         </button>
@@ -707,48 +738,48 @@ export function PizzaDetailsPanel({
                 {/* SUGGERIMENTI */}
                 {(filteredUserSuggestions.length > 0 ||
                   filteredGlobalSuggestions.length > 0) && (
-                    <div className="mt-3 space-y-2">
-                      {filteredUserSuggestions.length > 0 && (
-                        <div>
-                          <p className="text-[11px] text-slate-400 mb-1">
-                            Suggeriti per te (i tuoi ingredienti più usati)
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {filteredUserSuggestions.map(ing => (
-                              <button
-                                key={ing.id}
-                                type="button"
-                                onClick={() => handleToggleIngredient(ing)}
-                                className="px-3 py-1 rounded-full text-xs border border-amber-400/60 bg-amber-500/10 text-amber-200"
-                              >
-                                {ing.name}
-                              </button>
-                            ))}
-                          </div>
+                  <div className="mt-3 space-y-2">
+                    {filteredUserSuggestions.length > 0 && (
+                      <div>
+                        <p className="text-[11px] text-slate-400 mb-1">
+                          Suggeriti per te (i tuoi ingredienti più usati)
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {filteredUserSuggestions.map(ing => (
+                            <button
+                              key={ing.id}
+                              type="button"
+                              onClick={() => handleToggleIngredient(ing)}
+                              className="px-3 py-1 rounded-full text-xs border border-amber-400/60 bg-amber-500/10 text-amber-200"
+                            >
+                              {ing.name}
+                            </button>
+                          ))}
                         </div>
-                      )}
+                      </div>
+                    )}
 
-                      {filteredGlobalSuggestions.length > 0 && (
-                        <div>
-                          <p className="text-[11px] text-slate-400 mb-1">
-                            Ingredienti popolari (suggerimenti generali)
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {filteredGlobalSuggestions.map(ing => (
-                              <button
-                                key={ing.id}
-                                type="button"
-                                onClick={() => handleToggleIngredient(ing)}
-                                className="px-3 py-1 rounded-full text-xs border border-slate-600 bg-slate-900 text-slate-100"
-                              >
-                                {ing.name}
-                              </button>
-                            ))}
-                          </div>
+                    {filteredGlobalSuggestions.length > 0 && (
+                      <div>
+                        <p className="text-[11px] text-slate-400 mb-1">
+                          Ingredienti popolari (suggerimenti generali)
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {filteredGlobalSuggestions.map(ing => (
+                            <button
+                              key={ing.id}
+                              type="button"
+                              onClick={() => handleToggleIngredient(ing)}
+                              className="px-3 py-1 rounded-full text-xs border border-slate-600 bg-slate-900 text-slate-100"
+                            >
+                              {ing.name}
+                            </button>
+                          ))}
                         </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Ingredienti selezionati */}
                 {selectedIngredients.length > 0 && (
@@ -765,9 +796,7 @@ export function PizzaDetailsPanel({
                           className="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-200 border border-amber-400/60 flex items-center gap-1"
                         >
                           <span>{ing.name}</span>
-                          <span className="text-[9px] opacity-80">
-                            ✕
-                          </span>
+                          <span className="text-[9px] opacity-80">✕</span>
                         </button>
                       ))}
                     </div>
@@ -792,7 +821,6 @@ export function PizzaDetailsPanel({
         </div>
 
         <div className="flex justify-end gap-2 px-4 py-3 border-t border-slate-800">
-
           <button
             type="button"
             onClick={onClose}
