@@ -44,6 +44,7 @@ type LeaderboardRow = {
 };
 
 const CURRENT_YEAR = new Date().getFullYear();
+const LEADERBOARD_PAGE_SIZE = 10;
 
 export default function GroupDetailPage() {
   const router = useRouter();
@@ -63,6 +64,7 @@ export default function GroupDetailPage() {
   const [year, setYear] = useState(CURRENT_YEAR);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardPage, setLeaderboardPage] = useState(0);
 
   // inviti / aggiunta membri
   const [inviteQuery, setInviteQuery] = useState('');
@@ -202,6 +204,7 @@ export default function GroupDetailPage() {
         const ids = Array.from(participants);
         if (ids.length === 0) {
           setLeaderboard([]);
+          setLeaderboardPage(0);
           return;
         }
 
@@ -252,6 +255,7 @@ export default function GroupDetailPage() {
         rows.sort((a, b) => b.total - a.total);
 
         setLeaderboard(rows);
+        setLeaderboardPage(0);
       } catch (err: any) {
         console.error(err);
         setErrorMsg(err.message ?? 'Errore nel calcolo della classifica.');
@@ -427,6 +431,14 @@ export default function GroupDetailPage() {
     return p?.display_name || p?.username || id;
   };
 
+  // leaderboard paginata: mostriamo solo i primi N * (page + 1)
+  const displayedLeaderboard = leaderboard.slice(
+    0,
+    (leaderboardPage + 1) * LEADERBOARD_PAGE_SIZE
+  );
+  const leaderboardHasMore =
+    displayedLeaderboard.length < leaderboard.length;
+
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       <AppHeader />
@@ -528,50 +540,80 @@ export default function GroupDetailPage() {
               <p className="text-xs text-slate-300">
                 Carico la classifica...
               </p>
-            ) : leaderboard.length === 0 ? (
+            ) : displayedLeaderboard.length === 0 ? (
               <p className="text-xs text-slate-400">
                 Nessun dato per la classifica ancora. Appena i membri
                 iniziano a registrare pizze, compariranno qui.
               </p>
             ) : (
-              <ul className="space-y-2 text-sm">
-                {leaderboard.map((row, index) => (
-                  <li
-                    key={row.userId}
-                    className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl ${
-                      row.isMe
-                        ? 'bg-amber-400/10 border border-amber-300/60'
-                        : 'bg-slate-900/60 border border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs w-4 text-slate-400">
-                        {index + 1}.
-                      </span>
-                      <span className="text-sm">
-                        {row.profile
-                          ? row.profile.display_name ||
-                            row.profile.username ||
-                            row.userId
-                          : row.userId}
-                        {row.isMe && (
-                          <span className="ml-1 text-[10px] text-amber-300">
-                            (tu)
+              <>
+                <ul className="space-y-2 text-sm">
+                  {displayedLeaderboard.map((row, index) => {
+                    const profile = row.profile;
+                    const username = profile?.username ?? null;
+                    const label =
+                      profile?.display_name ||
+                      profile?.username ||
+                      row.userId;
+
+                    return (
+                      <li
+                        key={row.userId}
+                        className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl ${
+                          row.isMe
+                            ? 'bg-amber-400/10 border border-amber-300/60'
+                            : 'bg-slate-900/60 border border-slate-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs w-4 text-slate-400">
+                            {index + 1}.
                           </span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">
-                        {row.total} pizze
-                      </p>
-                      <p className="text-[10px] text-slate-400">
-                        {row.baseCount} di partenza + {row.pizzaCount} qui
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                          <span className="text-sm">
+                            {username ? (
+                              <Link
+                                href={`/u/${username}`}
+                                className="hover:underline"
+                              >
+                                {label}
+                              </Link>
+                            ) : (
+                              label
+                            )}
+                            {row.isMe && (
+                              <span className="ml-1 text-[10px] text-amber-300">
+                                (tu)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold">
+                            {row.total} pizze
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {row.baseCount} di partenza + {row.pizzaCount} qui
+                          </p>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {leaderboardHasMore && (
+                  <div className="mt-3 flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLeaderboardPage(p => p + 1)
+                      }
+                      className="text-xs px-4 py-1.5 rounded-full border border-slate-700 hover:bg-slate-900"
+                    >
+                      Mostra altri
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
