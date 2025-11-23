@@ -872,8 +872,9 @@ export default function GlobalStatsPage() {
                                                             )}
                                                         </div>
                                                         <span className="text-slate-300">
-                                                            {u.count} pizze il{' '}
-                                                            {WEEKDAY_LABELS_FULL[usersWeekday]}
+                                                        {u.count} pizze{' '}
+                                                        {WEEKDAY_LABELS_FULL[usersWeekday] === 'Domenica' ? 'la' : 'il'}{' '}
+                                                        {WEEKDAY_LABELS_FULL[usersWeekday]}
                                                         </span>
                                                     </li>
                                                 );
@@ -1076,14 +1077,14 @@ export default function GlobalStatsPage() {
                                 <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4">
                                     <div className="flex items-center justify-between mb-2">
                                         <h3 className="text-sm font-semibold">
-                                            Giorno della settimana più usato
+                                            Pizze per giorno della settimana
                                         </h3>
-                                        <button
+                                        {/*<button
                                             onClick={() => router.push('/stats/general/weekday')}
                                             className="text-[11px] px-2 py-1 rounded-full border border-slate-600 hover:bg-slate-900"
                                         >
                                             Vedi dettaglio
-                                        </button>
+                                        </button>*/}
                                     </div>
                                     <p className="text-[11px] text-slate-400 mb-2">
                                         Pizze per giorno della settimana nel periodo selezionato,
