@@ -107,6 +107,12 @@ const INGREDIENT_EMOJI_MAP: Record<string, string> = {
   'gorgonzola': '🧀',
   'mozzarella di bufala': '🧀',
   'bufala': '🧀',
+  'patatine fritte': '🍟',
+  'patate fritte': '🍟',
+  'patate': '🥔',
+  'patate al forno': '🥔',
+  'patate arrosto': '🥔',
+  'patate lesse': '🥔',
 };
 
 function getIngredientEmoji(name?: string | null): string {
