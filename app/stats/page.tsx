@@ -1216,10 +1216,14 @@ export default function GlobalStatsPage() {
                                                 return (
                                                     <div
                                                         key={idx}
-                                                        className="flex-1 flex flex-col items-center justify-end h-full"
+                                                        className="flex-1 flex flex-col items-center justify-end h-full relative group"
                                                     >
+                                                        {/* Tooltip */}
+                                                        <div className="absolute bottom-full mb-2 px-2 py-1 rounded bg-slate-950 text-[10px] text-slate-100 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 border border-slate-600">
+                                                            {WEEKDAY_LABELS_FULL[idx]}: {count} {count === 1 ? 'pizza' : 'pizze'}
+                                                        </div>
                                                         <div
-                                                            className="w-full rounded-t-md bg-amber-400"
+                                                            className="w-full rounded-t-md bg-amber-400 cursor-pointer"
                                                             style={{ height: `${heightPercent}%` }}
                                                         ></div>
                                                         <span className="text-[9px] mt-1 text-slate-400">
@@ -1311,8 +1315,12 @@ export default function GlobalStatsPage() {
                                                     return (
                                                         <div
                                                             key={item.label}
-                                                            className="flex items-center justify-between gap-2"
+                                                            className="flex items-center justify-between gap-2 group relative cursor-pointer hover:bg-slate-900/50 px-2 py-1 rounded transition-colors"
                                                         >
+                                                            {/* Tooltip */}
+                                                            <div className="absolute left-full ml-2 px-2 py-1 rounded bg-slate-950 text-[10px] text-slate-100 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 border border-slate-600">
+                                                                {item.label}: {item.value} {item.value === 1 ? 'pizza' : 'pizze'} ({pct.replace('.', ',')}%)
+                                                            </div>
                                                             <div className="flex items-center gap-2">
                                                                 <span
                                                                     className="w-3 h-3 rounded-full"
@@ -1364,10 +1372,14 @@ export default function GlobalStatsPage() {
                                             return (
                                                 <div
                                                     key={point.week}
-                                                    className="flex-1 flex flex-col items-center justify-end h-full"
+                                                    className="flex-1 flex flex-col items-center justify-end h-full relative group"
                                                 >
+                                                    {/* Tooltip */}
+                                                    <div className="absolute bottom-full mb-2 px-2 py-1 rounded bg-slate-950 text-[10px] text-slate-100 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10 border border-slate-600">
+                                                        Settimana {point.week}: {point.avg.toFixed(2).replace('.', ',')} pizze/utente
+                                                    </div>
                                                     <div
-                                                        className="w-full rounded-t-md bg-slate-300"
+                                                        className="w-full rounded-t-md bg-slate-300 cursor-pointer"
                                                         style={{ height: `${height}%` }}
                                                     ></div>
                                                     <span className="text-[9px] mt-1 text-slate-400">
