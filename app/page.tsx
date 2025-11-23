@@ -613,7 +613,6 @@ export default function Home() {
             )
           `
             )
-            .eq('pizzas.user_id', user.id)
             .gte('pizzas.eaten_at', toDateOnly(start))
             .lt('pizzas.eaten_at', toDateOnly(end));
 
