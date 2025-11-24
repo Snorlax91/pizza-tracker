@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AppHeader } from '@/components/AppHeader';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 
 type User = {
@@ -39,7 +40,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 
 
-export default function FriendsPage() {
+function FriendsPageContent() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -72,7 +73,6 @@ export default function FriendsPage() {
       if (error || !user) {
         setUser(null);
         setLoadingUser(false);
-        router.push('/auth');
         return;
       }
 
@@ -654,5 +654,13 @@ export default function FriendsPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function FriendsPage() {
+  return (
+    <ProtectedRoute>
+      <FriendsPageContent />
+    </ProtectedRoute>
   );
 }

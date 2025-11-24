@@ -7,6 +7,8 @@ import { PizzaDetailsPanel } from '@/components/PizzaDetailsPanel';
 import Link from 'next/link';
 import { AppHeader } from '@/components/AppHeader';
 import { getIngredientEmoji } from '@/lib/ingredientEmojis';
+import { LoginPromptModal } from '@/components/LoginPromptModal';
+import { LocalPizzaCounter } from '@/components/LocalPizzaCounter';
 
 type User = {
   id: string;
@@ -244,6 +246,15 @@ export default function Home() {
   });
   const [loadingIngredientMoments, setLoadingIngredientMoments] = useState(false);
 
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // Listener per il custom event dal LocalPizzaCounter
+  useEffect(() => {
+    const handleShowLoginModal = () => setShowLoginModal(true);
+    window.addEventListener('showLoginModal', handleShowLoginModal);
+    return () => window.removeEventListener('showLoginModal', handleShowLoginModal);
+  }, []);
+
   // Carica utente + profilo + gestisce onboarding
   useEffect(() => {
     const loadUserAndProfile = async () => {
@@ -255,7 +266,7 @@ export default function Home() {
       if (error || !user) {
         setUser(null);
         setLoadingUser(false);
-        router.push('/auth');
+        // Non reindirizziamo più, permettiamo l'accesso non loggato
         return;
       }
 
@@ -1013,16 +1024,91 @@ export default function Home() {
   if (loadingUser) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-900 text-slate-100">
-        <p>Caricamento utente...</p>
+        <p>Caricamento...</p>
       </main>
     );
   }
 
+  // Utente NON LOGGATO - mostra homepage pubblica con counter locale
   if (!user) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-900 text-slate-100">
-        <p>Reindirizzamento alla pagina di accesso...</p>
-      </main>
+      <>
+        <LoginPromptModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+        <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
+          <AppHeader 
+            isLoggedIn={false} 
+            onLoginClick={() => setShowLoginModal(true)} 
+          />
+          
+          <div className="flex-1 px-4 py-8">
+            <div className="max-w-5xl mx-auto space-y-8">
+              {/* Hero Section */}
+              <div className="text-center space-y-4 mb-8">
+                <div className="text-6xl mb-4">🍕</div>
+                <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
+                  Pizza Tracker
+                </h1>
+                <p className="text-lg text-slate-300 max-w-2xl mx-auto">
+                  Inizia subito a tracciare le tue pizze! Il counter funziona anche senza account.
+                </p>
+              </div>
+
+              {/* Counter Locale */}
+              <div className="mb-12">
+                <LocalPizzaCounter />
+              </div>
+
+              {/* Features Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 hover:bg-slate-800/70 transition-colors">
+                  <div className="text-4xl mb-3">📊</div>
+                  <h3 className="text-lg font-semibold text-slate-100 mb-2">Statistiche Personali</h3>
+                  <p className="text-sm text-slate-400">
+                    Traccia le tue pizze, vota ingredienti e scopri i tuoi gusti
+                  </p>
+                </div>
+                
+                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 hover:bg-slate-800/70 transition-colors">
+                  <div className="text-4xl mb-3">🏆</div>
+                  <h3 className="text-lg font-semibold text-slate-100 mb-2">Classifiche Globali</h3>
+                  <p className="text-sm text-slate-400">
+                    Competi con altri fan delle pizze e scala le classifiche
+                  </p>
+                </div>
+                
+                <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 hover:bg-slate-800/70 transition-colors">
+                  <div className="text-4xl mb-3">👥</div>
+                  <h3 className="text-lg font-semibold text-slate-100 mb-2">Amici e Gruppi</h3>
+                  <p className="text-sm text-slate-400">
+                    Condividi le tue pizze e sfida i tuoi amici
+                  </p>
+                </div>
+              </div>
+
+              {/* CTA Section */}
+              <div className="text-center pt-8 border-t border-slate-800">
+                <p className="text-slate-400 mb-4">
+                  Vuoi salvare anche foto, ingredienti, voti e competere nelle classifiche?
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                  <button
+                    onClick={() => setShowLoginModal(true)}
+                    className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold rounded-full transition-all shadow-lg hover:shadow-xl text-lg"
+                  >
+                    Registrati Ora 🚀
+                  </button>
+                  <Link
+                    href="/stats"
+                    className="px-8 py-4 border border-slate-600 hover:bg-slate-800 text-slate-100 font-semibold rounded-full transition-all"
+                  >
+                    Esplora Statistiche
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </>
     );
   }
 
@@ -1039,10 +1125,12 @@ export default function Home() {
   const prevMonthName = MONTH_LABELS[prevMonthIndex];
 
   return (
-    <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
-      <AppHeader displayName={displayName} />
-      {/* Barra ranking */}
-      <section className="px-4 py-3 border-b border-slate-800 bg-slate-900/80">
+    <>
+      <LoginPromptModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
+        <AppHeader displayName={displayName} isLoggedIn={true} />
+        {/* Barra ranking */}
+        <section className="px-4 py-3 border-b border-slate-800 bg-slate-900/80">
         <div className="max-w-6xl mx-auto">
           {loadingHighlights ? (
             <p className="text-xs text-slate-400">
@@ -1449,5 +1537,6 @@ export default function Home() {
         />
       )}
     </main>
+    </>
   );
 }

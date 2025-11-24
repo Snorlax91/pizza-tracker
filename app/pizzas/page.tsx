@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { PizzaDetailsPanel } from '@/components/PizzaDetailsPanel';
 import { AppHeader } from '@/components/AppHeader';
 import { getIngredientEmoji } from '@/lib/ingredientEmojis';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 
 type User = {
@@ -27,7 +28,7 @@ type PizzaListItem = {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-export default function PizzasPage() {
+function PizzasPageContent() {
     const router = useRouter();
     const [user, setUser] = useState<User | null>(null);
     const [loadingUser, setLoadingUser] = useState(true);
@@ -52,7 +53,6 @@ export default function PizzasPage() {
             if (error || !user) {
                 setUser(null);
                 setLoadingUser(false);
-                router.push('/auth');
                 return;
             }
 
@@ -314,5 +314,13 @@ export default function PizzasPage() {
                 />
             )}
         </main>
+    );
+}
+
+export default function PizzasPage() {
+    return (
+        <ProtectedRoute>
+            <PizzasPageContent />
+        </ProtectedRoute>
     );
 }

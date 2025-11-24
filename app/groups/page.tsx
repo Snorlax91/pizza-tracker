@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AppHeader } from '@/components/AppHeader';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 type User = {
   id: string;
@@ -27,7 +28,7 @@ type Membership = {
   status: 'pending' | 'active';
 };
 
-export default function GroupsPage() {
+function GroupsPageContent() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
@@ -66,7 +67,6 @@ export default function GroupsPage() {
       if (error || !user) {
         setUser(null);
         setLoadingUser(false);
-        router.push('/auth');
         return;
       }
 
@@ -691,5 +691,13 @@ export default function GroupsPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function GroupsPage() {
+  return (
+    <ProtectedRoute>
+      <GroupsPageContent />
+    </ProtectedRoute>
   );
 }

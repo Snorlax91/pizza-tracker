@@ -7,9 +7,11 @@ import { useState } from 'react';
 
 type AppHeaderProps = {
   displayName?: string | null;
+  isLoggedIn?: boolean;
+  onLoginClick?: () => void;
 };
 
-export function AppHeader({ displayName }: AppHeaderProps) {
+export function AppHeader({ displayName, isLoggedIn = true, onLoginClick }: AppHeaderProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -21,13 +23,27 @@ export function AppHeader({ displayName }: AppHeaderProps) {
     router.refresh();
   };
 
-  const navItems = [
-    { href: '/pizzas', label: 'Le mie pizze' },
-    { href: '/friends', label: 'Amici' },
-    { href: '/groups', label: 'Gruppi' },
-    { href: '/stats', label: 'Statistiche globali' },
-    { href: '/profile', label: 'Profilo' },
+  const handleLogin = () => {
+    setMenuOpen(false);
+    if (onLoginClick) {
+      onLoginClick();
+    } else {
+      router.push('/auth');
+    }
+  };
+
+  // Filtra i navItems in base allo stato di login
+  const allNavItems = [
+    { href: '/pizzas', label: 'Le mie pizze', requiresAuth: true },
+    { href: '/friends', label: 'Amici', requiresAuth: true },
+    { href: '/groups', label: 'Gruppi', requiresAuth: true },
+    { href: '/stats', label: 'Statistiche globali', requiresAuth: false },
+    { href: '/profile', label: 'Profilo', requiresAuth: true },
   ];
+
+  const navItems = isLoggedIn
+    ? allNavItems
+    : allNavItems.filter(item => !item.requiresAuth);
 
   const linkClasses = (href: string) =>
     `text-xs px-3 py-1 rounded-full border border-slate-700 hover:bg-slate-800 ${
@@ -56,25 +72,36 @@ export function AppHeader({ displayName }: AppHeaderProps) {
               {item.label}
             </Link>
           ))}
-          {displayName && (
-            <Link
-              href="/profile"
-              className="text-xs text-slate-400 hover:text-slate-200"
+          {isLoggedIn ? (
+            <>
+              {displayName && (
+                <Link
+                  href="/profile"
+                  className="text-xs text-slate-400 hover:text-slate-200"
+                >
+                  {displayName}
+                </Link>
+              )}
+              <button
+                onClick={handleLogout}
+                className="text-xs px-3 py-1 rounded-full border border-slate-600 hover:bg-slate-800"
+              >
+                Esci
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleLogin}
+              className="text-xs px-4 py-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold shadow-lg hover:shadow-xl transition-all"
             >
-              {displayName}
-            </Link>
+              Accedi
+            </button>
           )}
-          <button
-            onClick={handleLogout}
-            className="text-xs px-3 py-1 rounded-full border border-slate-600 hover:bg-slate-800"
-          >
-            Esci
-          </button>
         </div>
 
         {/* NAV MOBILE: solo hamburger + (opzionale) nome */}
         <div className="flex md:hidden items-center gap-2">
-          {displayName && (
+          {isLoggedIn && displayName && (
             <Link
               href="/profile"
               className="text-xs text-slate-400 hover:text-slate-200"
@@ -116,12 +143,21 @@ export function AppHeader({ displayName }: AppHeaderProps) {
                 {item.label}
               </Link>
             ))}
-            <button
-              onClick={handleLogout}
-              className="mt-1 text-xs px-3 py-2 rounded-xl border border-slate-600 text-red-300 hover:bg-red-500/10 text-left"
-            >
-              Esci
-            </button>
+            {isLoggedIn ? (
+              <button
+                onClick={handleLogout}
+                className="mt-1 text-xs px-3 py-2 rounded-xl border border-slate-600 text-red-300 hover:bg-red-500/10 text-left"
+              >
+                Esci
+              </button>
+            ) : (
+              <button
+                onClick={handleLogin}
+                className="mt-1 text-xs px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-semibold text-left"
+              >
+                Accedi
+              </button>
+            )}
           </nav>
         </div>
       )}

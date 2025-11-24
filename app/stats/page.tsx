@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { AppHeader } from '@/components/AppHeader';
 import { useRouter } from 'next/navigation';
 import { getIngredientEmoji } from '@/lib/ingredientEmojis';
+import { LoginPromptModal } from '@/components/LoginPromptModal';
 
 type IngredientStat = {
     id: number;
@@ -72,6 +73,7 @@ export default function GlobalStatsPage() {
     const [month, setMonth] = useState<number | 'all'>('all'); // 1-12 o 'all'
     const [loading, setLoading] = useState(false);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    const [showLoginModal, setShowLoginModal] = useState(false);
 
     const [rows, setRows] = useState<IngredientRow[]>([]);
     const [pizzasPeriod, setPizzasPeriod] = useState<PizzaPeriodRow[]>([]);
@@ -593,9 +595,11 @@ export default function GlobalStatsPage() {
     };
 
     return (
-        <main className="min-h-screen bg-slate-900 text-slate-100">
-            <AppHeader />
-            <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
+        <>
+            <LoginPromptModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+            <main className="min-h-screen bg-slate-900 text-slate-100">
+                <AppHeader isLoggedIn={false} onLoginClick={() => setShowLoginModal(true)} />
+                <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
                 {/* Controlli globali periodo / provenienza */}
                 <div className="flex flex-wrap items-center gap-3 mb-2 text-xs">
                     <div className="flex items-center gap-2">
@@ -1330,5 +1334,6 @@ export default function GlobalStatsPage() {
                 )}
             </div>
         </main>
+        </>
     );
 }

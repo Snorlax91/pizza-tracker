@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AppHeader } from '@/components/AppHeader';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 type Visibility = 'everyone' | 'friends' | 'groups' | 'none';
 
@@ -50,7 +51,7 @@ type RankingEntry = {
 
 const CURRENT_YEAR = new Date().getFullYear();
 
-export default function ProfilePage() {
+function ProfilePageContent() {
     const router = useRouter();
     const [loadingProfile, setLoadingProfile] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -99,7 +100,6 @@ export default function ProfilePage() {
                 } = await supabase.auth.getUser();
 
                 if (userError || !user) {
-                    router.push('/auth');
                     return;
                 }
 
@@ -198,7 +198,6 @@ export default function ProfilePage() {
             } = await supabase.auth.getUser();
 
             if (userError || !user) {
-                router.push('/auth');
                 return;
             }
 
@@ -1137,5 +1136,13 @@ export default function ProfilePage() {
                 </div>
             </div>
         </main>
+    );
+}
+
+export default function ProfilePage() {
+    return (
+        <ProtectedRoute>
+            <ProfilePageContent />
+        </ProtectedRoute>
     );
 }
