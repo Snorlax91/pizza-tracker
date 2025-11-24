@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { AppHeader } from '@/components/AppHeader';
+import { INGREDIENT_EMOJI_MAP } from '@/lib/ingredientEmojis';
 
 type LeaderboardRow = {
     ingredientId: number;
@@ -128,6 +130,12 @@ export default function TopIngredientsByCountPage() {
         if (leaderboard.length === 0) return 0;
         return Math.ceil(leaderboard.length / PAGE_SIZE);
     }, [leaderboard.length]);
+
+    // Funzione per ottenere emoji ingrediente
+    const getIngredientEmoji = (name: string): string => {
+        const normalized = name.toLowerCase().trim();
+        return INGREDIENT_EMOJI_MAP[normalized] || '🍕';
+    };
 
     // Ricerca ingrediente
     const handleSearch = () => {
@@ -370,7 +378,15 @@ export default function TopIngredientsByCountPage() {
                                     >
                                         <div className="flex items-center gap-3">
                                             <span className="text-xs w-8 text-slate-400">#{globalIndex}</span>
-                                            <span className="text-sm text-slate-100">{row.name}</span>
+                                            <Link
+                                                href={`/stats/ingredients/${row.ingredientId}`}
+                                                className="flex items-center gap-2 text-slate-100 hover:underline"
+                                            >
+                                                <span className="text-lg">
+                                                    {getIngredientEmoji(row.name)}
+                                                </span>
+                                                <span className="text-sm">{row.name}</span>
+                                            </Link>
                                         </div>
                                         <div className="text-right">
                                             <span className="block text-sm font-semibold">

@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { AppHeader } from '@/components/AppHeader';
+import { INGREDIENT_EMOJI_MAP } from '@/lib/ingredientEmojis';
 
 type LeaderboardRow = {
     ingredientId: number;
@@ -114,7 +116,7 @@ export default function TopIngredientsByCountPage() {
         };
 
         load();
-    }, [year, month]);
+    }, [year, month, weekday]);
 
     const periodLabel =
         month === 'all'
@@ -125,6 +127,12 @@ export default function TopIngredientsByCountPage() {
         if (leaderboard.length === 0) return 0;
         return Math.ceil(leaderboard.length / PAGE_SIZE);
     }, [leaderboard.length]);
+
+    // Funzione per ottenere emoji ingrediente
+    const getIngredientEmoji = (name: string): string => {
+        const normalized = name.toLowerCase().trim();
+        return INGREDIENT_EMOJI_MAP[normalized] || '🍕';
+    };
 
     // Ricerca ingrediente
     const handleSearch = () => {
@@ -216,7 +224,7 @@ export default function TopIngredientsByCountPage() {
                         Classifica ingredienti – pizze per giorno della settimana
                     </h1>
                     <p className="text-[11px] text-slate-400">
-                        Utenti ordinati per numero di pizze mangiate nel giorno selezionato, limitatamente al periodo ({periodLabel}).
+                        Ingredienti ordinati per numero di pizze mangiate nel giorno della settimana selezionato, limitatamente al periodo ({periodLabel}).
                     </p>
                 </div>
 
@@ -389,12 +397,20 @@ export default function TopIngredientsByCountPage() {
                                             <span className="text-xs w-8 text-slate-400">
                                                 #{globalIndex}
                                             </span>
-                                            <span className="text-sm text-slate-100">
-                                                {row.name}
-                                            </span>
+                                            <Link
+                                                href={`/stats/ingredients/${row.ingredientId}`}
+                                                className="flex items-center gap-2 text-slate-100 hover:underline"
+                                            >
+                                                <span className="text-lg">
+                                                    {getIngredientEmoji(row.name)}
+                                                </span>
+                                                <span className="text-sm">
+                                                    {row.name}
+                                                </span>
+                                            </Link>
                                         </div>
                                         <span className="text-sm font-semibold">
-                                            {row.count} pizze il {['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'][weekday]}
+                                            {row.count} pizze {['la', 'il', 'il', 'il', 'il', 'il', 'il'][weekday]} {['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'][weekday]}
                                         </span>
                                     </li>
                                 );

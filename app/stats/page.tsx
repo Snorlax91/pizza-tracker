@@ -1183,12 +1183,6 @@ export default function GlobalStatsPage() {
                                         <h3 className="text-sm font-semibold">
                                             Distribuzione per provenienza
                                         </h3>
-                                        <button
-                                            onClick={() => router.push('/stats/general/origin')}
-                                            className="text-[11px] px-2 py-1 rounded-full border border-slate-600 hover:bg-slate-900"
-                                        >
-                                            Vedi dettaglio
-                                        </button>
                                     </div>
                                     {pieSeries.length === 0 ? (
                                         <p className="text-xs text-slate-400">
@@ -1286,12 +1280,6 @@ export default function GlobalStatsPage() {
                                     <h3 className="text-sm font-semibold">
                                         Media pizze per utente per settimana
                                     </h3>
-                                    <button
-                                        onClick={() => router.push('/stats/general/weekly-avg')}
-                                        className="text-[11px] px-2 py-1 rounded-full border border-slate-600 hover:bg-slate-900"
-                                    >
-                                        Vedi dettaglio
-                                    </button>
                                 </div>
                                 <p className="text-[11px] text-slate-400 mb-2">
                                     Ogni barra mostra quante pizze in media mangia un utente nella settimana N del periodo selezionato.

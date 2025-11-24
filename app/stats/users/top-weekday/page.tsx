@@ -153,7 +153,7 @@ export default function TopPizzasUsersPage() {
         if (userId) {
             loadPizzas();
         }
-    }, [userId, year, month]);
+    }, [userId, year, month, weekday, router]);
 
     // 3) Carica profili di tutti gli userId presenti in leaderboard
     useEffect(() => {
@@ -329,11 +329,10 @@ export default function TopPizzasUsersPage() {
             <div className="flex-1 px-4 py-4 max-w-4xl mx-auto w-full flex flex-col gap-4">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-sm font-semibold">
-                        Classifica globale utenti – numero di pizze
+                        Classifica utenti per giorno della settimana
                     </h1>
                     <p className="text-[11px] text-slate-400">
-                        Vedi la classifica completa degli utenti per numero di pizze
-                        registrate nel periodo selezionato ({periodLabel}).
+                        Vedi la classifica completa degli utenti per numero di pizze mangiate nel giorno della settimana selezionato, limitatamente al periodo ({periodLabel}).
                     </p>
                 </div>
 
@@ -382,10 +381,13 @@ export default function TopPizzasUsersPage() {
                             <option value={11}>Nov</option>
                             <option value={12}>Dic</option>
                         </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-slate-300">Giorno:</span>
                         <select
                             value={weekday}
                             onChange={e => setWeekday(Number(e.target.value))}
-                            className="px-2 py-1 rounded-lg bg-slate-950 border border-slate-700 text-[11px]"
+                            className="px-2 py-1 rounded-lg bg-slate-950 border border-slate-700"
                         >
                             {['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato']
                                 .map((label, idx) => (
