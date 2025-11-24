@@ -271,6 +271,7 @@ export default function Home() {
   const [rankings, setRankings] = useState<RankingEntry[]>([]);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
   const [undoLoading, setUndoLoading] = useState(false);
+  const [showAllRankings, setShowAllRankings] = useState(false);
 
   // Contatori globali in tempo reale
   const [globalPizzasCurrentYear, setGlobalPizzasCurrentYear] = useState<number>(0);
@@ -784,16 +785,21 @@ export default function Home() {
           setGlobalPizzasCurrentYear(pizzasCount ?? 0);
 
           // Conta TUTTI gli ingredienti usati nell'anno corrente (anche se ripetuti)
-          const { count: ingredientsCount, error: ingredientsError } = await supabase
+          const { data: ingredientsData, error: ingredientsError } = await supabase
             .from('pizza_ingredients')
-            .select('id', { count: 'exact', head: true })
+            .select(`
+              id,
+              pizzas!inner (
+                eaten_at
+              )
+            `)
             .gte('pizzas.eaten_at', startYear)
-            .lte('pizzas.eaten_at', endYear)
-            .not('pizzas', 'is', null);
+            .lte('pizzas.eaten_at', endYear);
 
           if (ingredientsError) throw ingredientsError;
 
-          setGlobalIngredientsCurrentYear(ingredientsCount ?? 0);
+          // Conta tutte le righe (ogni riga = un ingrediente in una pizza)
+          setGlobalIngredientsCurrentYear(ingredientsData?.length ?? 0);
         } catch (e) {
           console.warn('Impossibile calcolare contatori globali', e);
         } finally {
@@ -1118,60 +1124,142 @@ export default function Home() {
                     Nessun posizionamento disponibile al momento. Inizia a registrare le tue pizze!
                   </p>
                 ) : (
-                  <div className="space-y-2 text-sm text-slate-300">
-                    {rankings.map((ranking, idx) => {
-                      const showIngredientLink = ranking.type === 'ingredient' || ranking.type === 'bestIngredient';
+                  <>
+                    <div className="space-y-2 text-sm text-slate-300">
+                      {/* Su mobile mostra solo i primi 3, su desktop tutti */}
+                      {rankings
+                        .slice(0, showAllRankings ? rankings.length : 3)
+                        .map((ranking, idx) => {
+                          const showIngredientLink = ranking.type === 'ingredient' || ranking.type === 'bestIngredient';
+                          
+                          return (
+                            <div
+                              key={idx}
+                              className="px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 flex items-center gap-3"
+                            >
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-semibold flex-shrink-0 ${
+                                  ranking.rank === 1
+                                    ? 'bg-yellow-400 text-slate-900'
+                                    : ranking.rank === 2
+                                    ? 'bg-slate-300 text-slate-900'
+                                    : ranking.rank === 3
+                                    ? 'bg-amber-700 text-slate-50'
+                                    : 'bg-slate-700 text-slate-100'
+                                }`}
+                              >
+                                {ranking.rank === 1
+                                  ? '🥇 1°'
+                                  : ranking.rank === 2
+                                  ? '🥈 2°'
+                                  : ranking.rank === 3
+                                  ? '🥉 3°'
+                                  : `#${ranking.rank}`}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-slate-200 font-medium">
+                                  {ranking.label}
+                                  {showIngredientLink && ranking.ingredientName && ranking.ingredientId && (
+                                    <>
+                                      {' '}
+                                      <Link 
+                                        href={`/stats/ingredients/${ranking.ingredientId}`}
+                                        className="font-semibold text-amber-400 hover:text-amber-300 underline"
+                                      >
+                                        {ranking.ingredientName}
+                                      </Link>
+                                    </>
+                                  )}
+                                </p>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  Posizione: <span className="font-bold text-amber-400">#{ranking.rank}</span> su {ranking.totalUsers} utenti
+                                  {ranking.count !== undefined && (
+                                    <> • {ranking.count} pizze</>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
                       
-                      return (
-                        <div
-                          key={idx}
-                          className="px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 flex items-center gap-3"
-                        >
-                          <span
-                            className={`px-2 py-1 rounded text-xs font-semibold flex-shrink-0 ${
-                              ranking.rank === 1
-                                ? 'bg-yellow-400 text-slate-900'
-                                : ranking.rank === 2
-                                ? 'bg-slate-300 text-slate-900'
-                                : ranking.rank === 3
-                                ? 'bg-amber-700 text-slate-50'
-                                : 'bg-slate-700 text-slate-100'
-                            }`}
-                          >
-                            {ranking.rank === 1
-                              ? '🥇 1°'
-                              : ranking.rank === 2
-                              ? '🥈 2°'
-                              : ranking.rank === 3
-                              ? '🥉 3°'
-                              : `#${ranking.rank}`}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-slate-200 font-medium">
-                              {ranking.label}
-                              {showIngredientLink && ranking.ingredientName && ranking.ingredientId && (
-                                <>
-                                  {' '}
-                                  <Link 
-                                    href={`/stats/ingredients/${ranking.ingredientId}`}
-                                    className="font-semibold text-amber-400 hover:text-amber-300 underline"
-                                  >
-                                    {ranking.ingredientName}
-                                  </Link>
-                                </>
-                              )}
-                            </p>
-                            <p className="text-xs text-slate-400 mt-0.5">
-                              Posizione: <span className="font-bold text-amber-400">#{ranking.rank}</span> su {ranking.totalUsers} utenti
-                              {ranking.count !== undefined && (
-                                <> • {ranking.count} pizze</>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                      {/* Su desktop mostra tutti i ranking rimanenti */}
+                      <div className="hidden lg:contents">
+                        {rankings.slice(3).map((ranking, idx) => {
+                          const showIngredientLink = ranking.type === 'ingredient' || ranking.type === 'bestIngredient';
+                          const actualIdx = idx + 3;
+                          
+                          return (
+                            <div
+                              key={actualIdx}
+                              className="px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 flex items-center gap-3"
+                            >
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-semibold flex-shrink-0 ${
+                                  ranking.rank === 1
+                                    ? 'bg-yellow-400 text-slate-900'
+                                    : ranking.rank === 2
+                                    ? 'bg-slate-300 text-slate-900'
+                                    : ranking.rank === 3
+                                    ? 'bg-amber-700 text-slate-50'
+                                    : 'bg-slate-700 text-slate-100'
+                                }`}
+                              >
+                                {ranking.rank === 1
+                                  ? '🥇 1°'
+                                  : ranking.rank === 2
+                                  ? '🥈 2°'
+                                  : ranking.rank === 3
+                                  ? '🥉 3°'
+                                  : `#${ranking.rank}`}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-slate-200 font-medium">
+                                  {ranking.label}
+                                  {showIngredientLink && ranking.ingredientName && ranking.ingredientId && (
+                                    <>
+                                      {' '}
+                                      <Link 
+                                        href={`/stats/ingredients/${ranking.ingredientId}`}
+                                        className="font-semibold text-amber-400 hover:text-amber-300 underline"
+                                      >
+                                        {ranking.ingredientName}
+                                      </Link>
+                                    </>
+                                  )}
+                                </p>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                  Posizione: <span className="font-bold text-amber-400">#{ranking.rank}</span> su {ranking.totalUsers} utenti
+                                  {ranking.count !== undefined && (
+                                    <> • {ranking.count} pizze</>
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    
+                    {/* Bottone espandi/comprimi solo su mobile e solo se ci sono più di 3 premi */}
+                    {rankings.length > 3 && (
+                      <button
+                        onClick={() => setShowAllRankings(!showAllRankings)}
+                        className="lg:hidden mt-2 w-full py-2 rounded-lg bg-slate-800/60 border border-slate-700/50 text-slate-300 text-xs font-medium hover:bg-slate-800 transition flex items-center justify-center gap-2"
+                      >
+                        {showAllRankings ? (
+                          <>
+                            Mostra meno
+                            <span className="text-lg">▲</span>
+                          </>
+                        ) : (
+                          <>
+                            Mostra altri {rankings.length - 3} premi
+                            <span className="text-lg">▼</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
 
