@@ -45,6 +45,15 @@ type LeaderboardRow = {
 
 type LeaderboardViewMode = 'aroundMe' | 'top' | 'search';
 
+type WeeklyData = {
+  weekNumber: number;
+  weekLabel: string;
+  data: Record<string, number>; // userId -> valore (posizione o count)
+};
+
+type ChartMode = 'position' | 'pizzas';
+type ChartViewMode = 'top10' | 'aroundMe';
+
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function GroupDetailPage() {
@@ -78,6 +87,12 @@ export default function GroupDetailPage() {
   const [searchingInvite, setSearchingInvite] = useState(false);
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // grafico settimanale
+  const [chartMode, setChartMode] = useState<ChartMode>('pizzas');
+  const [chartViewMode, setChartViewMode] = useState<ChartViewMode>('top10');
+  const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([]);
+  const [loadingChart, setLoadingChart] = useState(false);
 
   // carica utente
   useEffect(() => {
@@ -276,6 +291,141 @@ export default function GroupDetailPage() {
       loadLeaderboard();
     }
   }, [group, members, year, profilesMap, user]);
+
+  // carica dati settimanali per il grafico
+  useEffect(() => {
+    const loadWeeklyData = async () => {
+      if (!group || !user || leaderboard.length === 0) return;
+      
+      setLoadingChart(true);
+
+      try {
+        // identifica i partecipanti da mostrare nel grafico
+        let participantIds: string[];
+        
+        if (chartViewMode === 'top10') {
+          // Top 10 + me stesso se non sono nei top 10
+          const top10 = leaderboard.slice(0, 10).map(r => r.userId);
+          if (!top10.includes(user.id)) {
+            participantIds = [...top10, user.id];
+          } else {
+            participantIds = top10;
+          }
+        } else {
+          // Intorno a me: 5 sopra e 5 sotto + me stesso
+          const myIdx = leaderboard.findIndex(r => r.userId === user.id);
+          if (myIdx === -1) {
+            participantIds = leaderboard.slice(0, 11).map(r => r.userId);
+          } else {
+            const start = Math.max(0, myIdx - 5);
+            const end = Math.min(leaderboard.length, myIdx + 6);
+            participantIds = leaderboard.slice(start, end).map(r => r.userId);
+          }
+        }
+
+        // calcola il numero di settimane nell'anno
+        const weeksInYear = getWeeksInYear(year);
+        
+        // carica tutte le pizze dell'anno per i partecipanti
+        const { data: pizzas, error: pizzasError } = await supabase
+          .from('pizzas')
+          .select('user_id, eaten_at')
+          .in('user_id', participantIds)
+          .gte('eaten_at', `${year}-01-01`)
+          .lte('eaten_at', `${year}-12-31`);
+
+        if (pizzasError) throw pizzasError;
+
+        // organizza pizze per settimana e utente
+        const weeklyCountsMap: Record<number, Record<string, number>> = {};
+        
+        for (let w = 1; w <= weeksInYear; w++) {
+          weeklyCountsMap[w] = {};
+          participantIds.forEach(uid => {
+            weeklyCountsMap[w][uid] = 0;
+          });
+        }
+
+        (pizzas ?? []).forEach(pizza => {
+          if (!pizza.eaten_at) return;
+          const date = new Date(pizza.eaten_at);
+          const weekNum = getWeekNumber(date);
+          if (weekNum >= 1 && weekNum <= weeksInYear) {
+            weeklyCountsMap[weekNum][pizza.user_id] = 
+              (weeklyCountsMap[weekNum][pizza.user_id] || 0) + 1;
+          }
+        });
+
+        // calcola i dati settimanali in base al chartMode
+        const weekly: WeeklyData[] = [];
+        
+        for (let w = 1; w <= weeksInYear; w++) {
+          const weekLabel = `S${w}`;
+          
+          if (chartMode === 'pizzas') {
+            // conta pizze per settimana
+            weekly.push({
+              weekNumber: w,
+              weekLabel,
+              data: { ...weeklyCountsMap[w] },
+            });
+          } else {
+            // calcola posizioni cumulative
+            const cumulativeCounts: Record<string, number> = {};
+            participantIds.forEach(uid => {
+              cumulativeCounts[uid] = 0;
+            });
+
+            // somma tutte le pizze fino a questa settimana
+            for (let i = 1; i <= w; i++) {
+              participantIds.forEach(uid => {
+                cumulativeCounts[uid] += weeklyCountsMap[i][uid] || 0;
+              });
+            }
+
+            // ordina per count e assegna posizioni
+            const sorted = participantIds
+              .map(uid => ({ uid, count: cumulativeCounts[uid] }))
+              .sort((a, b) => b.count - a.count);
+
+            const positions: Record<string, number> = {};
+            sorted.forEach((item, idx) => {
+              positions[item.uid] = idx + 1;
+            });
+
+            weekly.push({
+              weekNumber: w,
+              weekLabel,
+              data: positions,
+            });
+          }
+        }
+
+        setWeeklyData(weekly);
+      } catch (err) {
+        console.error('Errore nel caricamento dati settimanali', err);
+      } finally {
+        setLoadingChart(false);
+      }
+    };
+
+    loadWeeklyData();
+  }, [group, leaderboard, year, user, chartMode, chartViewMode]);
+
+  // helper: calcola numero settimana dell'anno (ISO 8601)
+  const getWeekNumber = (date: Date): number => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return weekNo;
+  };
+
+  const getWeeksInYear = (year: number): number => {
+    const lastDay = new Date(year, 11, 31);
+    return getWeekNumber(lastDay);
+  };
 
   // indice del mio utente in classifica
   const myIndex = useMemo(() => {
@@ -523,6 +673,215 @@ export default function GroupDetailPage() {
   const getProfileName = (id: string) => {
     const p = profilesMap[id];
     return p?.display_name || p?.username || id;
+  };
+
+  // componente grafico
+  const WeeklyChart = () => {
+    if (loadingChart) {
+      return (
+        <div className="h-64 flex items-center justify-center">
+          <p className="text-xs text-slate-400">Carico il grafico...</p>
+        </div>
+      );
+    }
+
+    if (weeklyData.length === 0) {
+      return (
+        <div className="h-64 flex items-center justify-center">
+          <p className="text-xs text-slate-400">Nessun dato disponibile</p>
+        </div>
+      );
+    }
+
+    // identifica gli utenti da mostrare
+    const userIds = Object.keys(weeklyData[0].data);
+    
+    // colori per le linee
+    const colors = [
+      '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899',
+      '#f97316', '#14b8a6', '#6366f1', '#a855f7', '#ef4444',
+      '#84cc16',
+    ];
+
+    // trova min/max per scaling
+    const allValues = weeklyData.flatMap(w => Object.values(w.data));
+    const minValue = Math.min(...allValues);
+    const maxValue = Math.max(...allValues);
+
+    const padding = { top: 20, right: 20, bottom: 40, left: 50 };
+    const width = 800;
+    const height = 300;
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    // scala X (settimane)
+    const xStep = chartWidth / (weeklyData.length - 1 || 1);
+    
+    // scala Y
+    const yRange = maxValue - minValue || 1;
+    const yScale = (value: number) => {
+      if (chartMode === 'position') {
+        // inverti l'asse Y per le posizioni (1° in alto)
+        return padding.top + ((value - minValue) / yRange) * chartHeight;
+      } else {
+        return padding.top + chartHeight - ((value - minValue) / yRange) * chartHeight;
+      }
+    };
+
+    return (
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="w-full h-auto"
+          style={{ maxHeight: '300px' }}
+        >
+          {/* Griglia orizzontale */}
+          {[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+            const value = minValue + ratio * yRange;
+            const y = yScale(value);
+            return (
+              <g key={ratio}>
+                <line
+                  x1={padding.left}
+                  y1={y}
+                  x2={width - padding.right}
+                  y2={y}
+                  stroke="#334155"
+                  strokeWidth="1"
+                  strokeDasharray="4 4"
+                />
+                <text
+                  x={padding.left - 10}
+                  y={y + 4}
+                  textAnchor="end"
+                  fontSize="10"
+                  fill="#94a3b8"
+                >
+                  {chartMode === 'position' 
+                    ? `${Math.round(value)}°`
+                    : Math.round(value)}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Asse X (etichette settimane) */}
+          {weeklyData.map((w, idx) => {
+            if (idx % 4 !== 0 && idx !== weeklyData.length - 1) return null;
+            const x = padding.left + idx * xStep;
+            return (
+              <text
+                key={w.weekNumber}
+                x={x}
+                y={height - padding.bottom + 20}
+                textAnchor="middle"
+                fontSize="10"
+                fill="#94a3b8"
+              >
+                {w.weekLabel}
+              </text>
+            );
+          })}
+
+          {/* Linee per ogni utente */}
+          {userIds.map((uid, userIdx) => {
+            const color = colors[userIdx % colors.length];
+            const isMe = uid === user?.id;
+            
+            const points = weeklyData
+              .map((w, idx) => {
+                const value = w.data[uid] ?? (chartMode === 'position' ? maxValue : 0);
+                const x = padding.left + idx * xStep;
+                const y = yScale(value);
+                return `${x},${y}`;
+              })
+              .join(' ');
+
+            return (
+              <g key={uid}>
+                <polyline
+                  points={points}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={isMe ? '3' : '2'}
+                  opacity={isMe ? '1' : '0.7'}
+                />
+                {/* Punti */}
+                {weeklyData.map((w, idx) => {
+                  const value = w.data[uid] ?? (chartMode === 'position' ? maxValue : 0);
+                  const x = padding.left + idx * xStep;
+                  const y = yScale(value);
+                  return (
+                    <circle
+                      key={`${uid}-${idx}`}
+                      cx={x}
+                      cy={y}
+                      r={isMe ? '4' : '3'}
+                      fill={color}
+                      opacity={isMe ? '1' : '0.8'}
+                    >
+                      <title>
+                        {getProfileName(uid)} - {w.weekLabel}: {
+                          chartMode === 'position' 
+                            ? `${value}° posto`
+                            : `${value} pizze`
+                        }
+                      </title>
+                    </circle>
+                  );
+                })}
+              </g>
+            );
+          })}
+
+          {/* Etichette assi */}
+          <text
+            x={width / 2}
+            y={height - 5}
+            textAnchor="middle"
+            fontSize="11"
+            fill="#cbd5e1"
+            fontWeight="600"
+          >
+            Settimana
+          </text>
+          <text
+            x={15}
+            y={height / 2}
+            textAnchor="middle"
+            fontSize="11"
+            fill="#cbd5e1"
+            fontWeight="600"
+            transform={`rotate(-90 15 ${height / 2})`}
+          >
+            {chartMode === 'position' ? 'Posizione' : 'Pizze'}
+          </text>
+        </svg>
+
+        {/* Leggenda */}
+        <div className="mt-3 flex flex-wrap gap-2 text-[10px]">
+          {userIds.map((uid, idx) => {
+            const color = colors[idx % colors.length];
+            const isMe = uid === user?.id;
+            return (
+              <div
+                key={uid}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900/60 border border-slate-700"
+              >
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: color }}
+                />
+                <span className={isMe ? 'font-bold text-amber-300' : 'text-slate-300'}>
+                  {getProfileName(uid)}
+                  {isMe && ' (tu)'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -895,6 +1254,81 @@ export default function GroupDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Grafico andamento settimanale */}
+        {(isMemberActive || isOwner) && leaderboard.length > 0 && (
+          <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">
+                  Andamento settimanale {year}
+                </h2>
+                
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Toggle modalità grafico */}
+                  <div className="flex gap-1 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setChartMode('pizzas')}
+                      className={`px-3 py-1 rounded-full border ${
+                        chartMode === 'pizzas'
+                          ? 'bg-slate-900 border-amber-300/70 text-amber-200'
+                          : 'border-slate-700 text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      Pizze/settimana
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartMode('position')}
+                      className={`px-3 py-1 rounded-full border ${
+                        chartMode === 'position'
+                          ? 'bg-slate-900 border-amber-300/70 text-amber-200'
+                          : 'border-slate-700 text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      Posizione
+                    </button>
+                  </div>
+
+                  {/* Toggle vista */}
+                  <div className="flex gap-1 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setChartViewMode('top10')}
+                      className={`px-3 py-1 rounded-full border ${
+                        chartViewMode === 'top10'
+                          ? 'bg-slate-900 border-emerald-300/70 text-emerald-200'
+                          : 'border-slate-700 text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      Top 10
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setChartViewMode('aroundMe')}
+                      className={`px-3 py-1 rounded-full border ${
+                        chartViewMode === 'aroundMe'
+                          ? 'bg-slate-900 border-emerald-300/70 text-emerald-200'
+                          : 'border-slate-700 text-slate-200 hover:bg-slate-900'
+                      }`}
+                    >
+                      Intorno a me
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-400">
+                {chartMode === 'pizzas'
+                  ? 'Numero di pizze registrate per ogni settimana'
+                  : 'Posizione in classifica basata sul totale cumulativo fino a quella settimana'}
+              </p>
+
+              <WeeklyChart />
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
