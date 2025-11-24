@@ -269,6 +269,11 @@ export default function Home() {
   const [loadingHighlights, setLoadingHighlights] = useState(false);
   const [undoLoading, setUndoLoading] = useState(false);
 
+  // Contatori globali in tempo reale
+  const [globalPizzasCurrentYear, setGlobalPizzasCurrentYear] = useState<number>(0);
+  const [globalIngredientsCurrentYear, setGlobalIngredientsCurrentYear] = useState<number>(0);
+  const [loadingGlobalStats, setLoadingGlobalStats] = useState(false);
+
   const {
     year,
     setYear,
@@ -762,6 +767,42 @@ export default function Home() {
 
         setRankings(newRankings);
 
+        // ========== CONTATORI GLOBALI ANNO CORRENTE ==========
+        setLoadingGlobalStats(true);
+        try {
+          // Conta tutte le pizze dell'anno corrente
+          const { count: pizzasCount, error: pizzasError } = await supabase
+            .from('pizzas')
+            .select('id', { count: 'exact', head: true })
+            .gte('eaten_at', startYear)
+            .lte('eaten_at', endYear);
+
+          if (pizzasError) throw pizzasError;
+          setGlobalPizzasCurrentYear(pizzasCount ?? 0);
+
+          // Conta gli ingredienti distinti usati nell'anno corrente
+          const { data: ingredientsData, error: ingredientsError } = await supabase
+            .from('pizza_ingredients')
+            .select('ingredient_id, pizzas!inner(eaten_at)')
+            .gte('pizzas.eaten_at', startYear)
+            .lte('pizzas.eaten_at', endYear);
+
+          if (ingredientsError) throw ingredientsError;
+
+          const uniqueIngredients = new Set<number>();
+          (ingredientsData ?? []).forEach((row: any) => {
+            if (row.ingredient_id) {
+              uniqueIngredients.add(row.ingredient_id);
+            }
+          });
+
+          setGlobalIngredientsCurrentYear(uniqueIngredients.size);
+        } catch (e) {
+          console.warn('Impossibile calcolare contatori globali', e);
+        } finally {
+          setLoadingGlobalStats(false);
+        }
+
       } catch (err) {
         console.error(err);
         // non blocchiamo la home per errori di highlight
@@ -1071,69 +1112,107 @@ export default function Home() {
             <p className="text-xs text-slate-400">
               Carico le tue statistiche globali...
             </p>
-          ) : rankings.length === 0 ? (
-            <p className="text-xs text-slate-400">
-              Nessun posizionamento disponibile al momento. Inizia a registrare le tue pizze!
-            </p>
           ) : (
-            <div className="space-y-2 text-[11px] text-slate-300">
-              {rankings.map((ranking, idx) => {
-                const showIngredientLink = ranking.type === 'ingredient' || ranking.type === 'bestIngredient';
-                
-                return (
-                  <div
-                    key={idx}
-                    className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-2"
-                  >
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-semibold flex-shrink-0 ${
-                        ranking.rank === 1
-                          ? 'bg-yellow-400 text-slate-900'
-                          : ranking.rank === 2
-                          ? 'bg-slate-300 text-slate-900'
-                          : ranking.rank === 3
-                          ? 'bg-amber-700 text-slate-50'
-                          : 'bg-slate-700 text-slate-100'
-                      }`}
-                    >
-                      {ranking.rank === 1
-                        ? '🥇'
-                        : ranking.rank === 2
-                        ? '🥈'
-                        : ranking.rank === 3
-                        ? '🥉'
-                        : `#${ranking.rank}`}
-                    </span>
-                    <div className="flex-1 flex flex-wrap items-baseline gap-1 min-w-0">
-                      <span className="text-slate-200">
-                        {ranking.label}
-                        {showIngredientLink && ranking.ingredientName && ranking.ingredientId && (
-                          <>
-                            {' '}
-                            <Link 
-                              href={`/stats/ingredients/${ranking.ingredientId}`}
-                              className="font-semibold text-amber-400 hover:text-amber-300 underline"
-                            >
-                              {ranking.ingredientName}
-                            </Link>
-                          </>
-                        )}
-                        {!showIngredientLink && ':'}
-                        {' '}sei{' '}
-                        <span className="font-bold text-amber-400">
-                          #{ranking.rank}
-                        </span>
-                        {' '}su {ranking.totalUsers} utenti
-                      </span>
-                      {ranking.count !== undefined && (
-                        <span className="text-[10px] text-slate-400">
-                          • {ranking.count} {ranking.count === 1 ? 'pizza' : 'pizze'}
-                        </span>
-                      )}
-                    </div>
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-start">
+              {/* Colonna sinistra: Ranking personali */}
+              <div>
+                {rankings.length === 0 ? (
+                  <p className="text-xs text-slate-400">
+                    Nessun posizionamento disponibile al momento. Inizia a registrare le tue pizze!
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 text-[11px] text-slate-300">
+                    {rankings.map((ranking, idx) => {
+                      const showIngredientLink = ranking.type === 'ingredient' || ranking.type === 'bestIngredient';
+                      
+                      return (
+                        <div
+                          key={idx}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50 flex items-center gap-2"
+                        >
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-semibold flex-shrink-0 ${
+                              ranking.rank === 1
+                                ? 'bg-yellow-400 text-slate-900'
+                                : ranking.rank === 2
+                                ? 'bg-slate-300 text-slate-900'
+                                : ranking.rank === 3
+                                ? 'bg-amber-700 text-slate-50'
+                                : 'bg-slate-700 text-slate-100'
+                            }`}
+                          >
+                            {ranking.rank === 1
+                              ? '🥇'
+                              : ranking.rank === 2
+                              ? '🥈'
+                              : ranking.rank === 3
+                              ? '🥉'
+                              : `#${ranking.rank}`}
+                          </span>
+                          <div className="flex-1 flex items-baseline gap-1 min-w-0">
+                            <span className="text-slate-200 text-[10px]">
+                              {ranking.label}
+                              {showIngredientLink && ranking.ingredientName && ranking.ingredientId && (
+                                <>
+                                  {' '}
+                                  <Link 
+                                    href={`/stats/ingredients/${ranking.ingredientId}`}
+                                    className="font-semibold text-amber-400 hover:text-amber-300 underline"
+                                  >
+                                    {ranking.ingredientName}
+                                  </Link>
+                                </>
+                              )}
+                              {!showIngredientLink && ':'}
+                              {' '}
+                              <span className="font-bold text-amber-400">
+                                #{ranking.rank}
+                              </span>
+                              /{ranking.totalUsers}
+                              {ranking.count !== undefined && (
+                                <span className="text-slate-500">
+                                  {' '}• {ranking.count}🍕
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                )}
+              </div>
+
+              {/* Colonna destra: Contatori globali */}
+              <div className="flex flex-col gap-3 min-w-[200px]">
+                <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/20 border-2 border-amber-500/30 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-amber-300/80 font-semibold mb-1">
+                    Pizze nel {new Date().getFullYear()}
+                  </p>
+                  {loadingGlobalStats ? (
+                    <p className="text-2xl font-black text-amber-400">...</p>
+                  ) : (
+                    <p className="text-4xl font-black text-amber-400">
+                      {globalPizzasCurrentYear.toLocaleString('it-IT')}
+                    </p>
+                  )}
+                  <p className="text-[9px] text-slate-400 mt-1">🌍 Globale</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border-2 border-emerald-500/30 rounded-2xl p-4 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold mb-1">
+                    Ingredienti {new Date().getFullYear()}
+                  </p>
+                  {loadingGlobalStats ? (
+                    <p className="text-2xl font-black text-emerald-400">...</p>
+                  ) : (
+                    <p className="text-4xl font-black text-emerald-400">
+                      {globalIngredientsCurrentYear}
+                    </p>
+                  )}
+                  <p className="text-[9px] text-slate-400 mt-1">🌍 Globale</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
