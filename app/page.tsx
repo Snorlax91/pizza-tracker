@@ -1118,17 +1118,17 @@ export default function Home() {
                     Nessun posizionamento disponibile al momento. Inizia a registrare le tue pizze!
                   </p>
                 ) : (
-                  <div className="space-y-1.5 text-[11px] text-slate-300">
+                  <div className="space-y-2 text-sm text-slate-300">
                     {rankings.map((ranking, idx) => {
                       const showIngredientLink = ranking.type === 'ingredient' || ranking.type === 'bestIngredient';
                       
                       return (
                         <div
                           key={idx}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/50 flex items-center gap-2"
+                          className="px-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 flex items-center gap-3"
                         >
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[9px] font-semibold flex-shrink-0 ${
+                            className={`px-2 py-1 rounded text-xs font-semibold flex-shrink-0 ${
                               ranking.rank === 1
                                 ? 'bg-yellow-400 text-slate-900'
                                 : ranking.rank === 2
@@ -1139,15 +1139,15 @@ export default function Home() {
                             }`}
                           >
                             {ranking.rank === 1
-                              ? '🥇'
+                              ? '🥇 1°'
                               : ranking.rank === 2
-                              ? '🥈'
+                              ? '🥈 2°'
                               : ranking.rank === 3
-                              ? '🥉'
+                              ? '🥉 3°'
                               : `#${ranking.rank}`}
                           </span>
-                          <div className="flex-1 flex items-baseline gap-1 min-w-0">
-                            <span className="text-slate-200 text-[10px]">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-slate-200 font-medium">
                               {ranking.label}
                               {showIngredientLink && ranking.ingredientName && ranking.ingredientId && (
                                 <>
@@ -1160,18 +1160,13 @@ export default function Home() {
                                   </Link>
                                 </>
                               )}
-                              {!showIngredientLink && ':'}
-                              {' '}
-                              <span className="font-bold text-amber-400">
-                                #{ranking.rank}
-                              </span>
-                              /{ranking.totalUsers}
+                            </p>
+                            <p className="text-xs text-slate-400 mt-0.5">
+                              Posizione: <span className="font-bold text-amber-400">#{ranking.rank}</span> su {ranking.totalUsers} utenti
                               {ranking.count !== undefined && (
-                                <span className="text-slate-500">
-                                  {' '}• {ranking.count}🍕
-                                </span>
+                                <> • {ranking.count} pizze</>
                               )}
-                            </span>
+                            </p>
                           </div>
                         </div>
                       );
