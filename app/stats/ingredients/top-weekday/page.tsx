@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { AppHeader } from '@/components/AppHeader';
+import Link from 'next/link';
 
 type LeaderboardRow = {
-    ingredientId: number;
-    name: string;
+    userId: string;
+    username: string | null;
+    displayName: string | null;
     count: number;
 };
 
@@ -15,7 +17,7 @@ type ViewMode = 'top' | 'all' | 'search';
 const CURRENT_YEAR = new Date().getFullYear();
 const PAGE_SIZE = 50;
 
-export default function TopIngredientsByCountPage() {
+export default function TopUsersByWeekdayPage() {
     const [year, setYear] = useState(CURRENT_YEAR);
     const [month, setMonth] = useState<number | 'all'>('all');
 
@@ -34,7 +36,7 @@ export default function TopIngredientsByCountPage() {
     const [searchError, setSearchError] = useState<string | null>(null);
     const [weekday, setWeekday] = useState<number>(1); // 0=Dom,...6=Sab
 
-    // Carica ingredienti per il periodo selezionato
+    // Carica utenti per il periodo selezionato
     useEffect(() => {
         const load = async () => {
             setLoading(true);
@@ -59,54 +61,66 @@ export default function TopIngredientsByCountPage() {
                 })();
 
                 const { data, error } = await supabase
-                    .from('pizza_ingredients')
-                    .select(`
-            ingredient_id,
-            ingredients ( id, name ),
-            pizzas!inner (
-            eaten_at
-            )
-        `)
-                    .gte('pizzas.eaten_at', startDate)
-                    .lte('pizzas.eaten_at', endDate);
-
+                    .from('pizzas')
+                    .select('user_id, eaten_at')
+                    .gte('eaten_at', startDate)
+                    .lte('eaten_at', endDate);
 
                 if (error) throw error;
 
-                const counts: Record<number, { name: string; count: number }> = {};
+                const counts: Record<string, number> = {};
 
                 (data ?? []).forEach((row: any) => {
-                    const ingId = row.ingredient_id as number;
-                    const ingName = row.ingredients?.name as string | undefined;
-                    const eaten_at = row.pizzas?.eaten_at as string | null;
+                    const userId = row.user_id as string;
+                    const eaten_at = row.eaten_at as string | null;
 
-                    if (!ingId || !ingName || !eaten_at) return;
+                    if (!userId || !eaten_at) return;
 
                     const d = new Date(eaten_at);
                     if (Number.isNaN(d.getTime())) return;
-                    if (d.getDay() !== weekday) return; // 👈 filtro per giorno selezionato
+                    if (d.getDay() !== weekday) return;
 
-                    if (!counts[ingId]) {
-                        counts[ingId] = { name: ingName, count: 0 };
-                    }
-                    counts[ingId].count += 1;
+                    counts[userId] = (counts[userId] || 0) + 1;
+                });
+
+                // Carica i profili degli utenti
+                const userIds = Object.keys(counts);
+                if (userIds.length === 0) {
+                    setLeaderboard([]);
+                    setLoading(false);
+                    return;
+                }
+
+                const { data: profiles, error: pError } = await supabase
+                    .from('profiles')
+                    .select('id, username, display_name')
+                    .in('id', userIds);
+
+                if (pError) throw pError;
+
+                const profilesMap: Record<string, { username: string | null; displayName: string | null }> = {};
+                (profiles ?? []).forEach((p: any) => {
+                    profilesMap[p.id] = {
+                        username: p.username ?? null,
+                        displayName: p.display_name ?? null,
+                    };
                 });
 
                 const lb: LeaderboardRow[] = Object.entries(counts)
-                    .map(([id, v]) => ({
-                        ingredientId: Number(id),
-                        name: v.name,
-                        count: v.count,
+                    .map(([userId, count]) => ({
+                        userId,
+                        username: profilesMap[userId]?.username ?? null,
+                        displayName: profilesMap[userId]?.displayName ?? null,
+                        count,
                     }))
                     .sort((a, b) => b.count - a.count);
-
 
                 setLeaderboard(lb);
             } catch (err: any) {
                 console.error(err);
                 setErrorMsg(
                     err.message ??
-                    'Errore nel caricamento della classifica ingredienti.'
+                    'Errore nel caricamento della classifica utenti.'
                 );
             } finally {
                 setLoading(false);
@@ -114,7 +128,7 @@ export default function TopIngredientsByCountPage() {
         };
 
         load();
-    }, [year, month]);
+    }, [year, month, weekday]);
 
     const periodLabel =
         month === 'all'
@@ -126,7 +140,7 @@ export default function TopIngredientsByCountPage() {
         return Math.ceil(leaderboard.length / PAGE_SIZE);
     }, [leaderboard.length]);
 
-    // Ricerca ingrediente
+    // Ricerca utente
     const handleSearch = () => {
         setSearchError(null);
 
@@ -137,15 +151,17 @@ export default function TopIngredientsByCountPage() {
             return;
         }
 
-        const idx = leaderboard.findIndex(row =>
-            row.name.toLowerCase().includes(q)
-        );
+        const idx = leaderboard.findIndex(row => {
+            const username = row.username?.toLowerCase() || '';
+            const displayName = row.displayName?.toLowerCase() || '';
+            return username.includes(q) || displayName.includes(q);
+        });
 
         if (idx === -1) {
             setSearchResultIndex(null);
             setViewMode('all');
             setSearchError(
-                'Nessun ingrediente trovato in classifica con questo nome.'
+                'Nessun utente trovato in classifica con questo nome.'
             );
             return;
         }
@@ -190,12 +206,12 @@ export default function TopIngredientsByCountPage() {
             return null;
 
         const firstIdx = leaderboard.findIndex(
-            r => r.ingredientId === displayedLeaderboard[0].ingredientId
+            r => r.userId === displayedLeaderboard[0].userId
         );
         const lastIdx = leaderboard.findIndex(
             r =>
-                r.ingredientId ===
-                displayedLeaderboard[displayedLeaderboard.length - 1].ingredientId
+                r.userId ===
+                displayedLeaderboard[displayedLeaderboard.length - 1].userId
         );
         if (firstIdx === -1 || lastIdx === -1) return null;
 
@@ -213,7 +229,7 @@ export default function TopIngredientsByCountPage() {
             <div className="flex-1 px-4 py-4 max-w-4xl mx-auto w-full flex flex-col gap-4">
                 <div className="flex flex-col gap-1">
                     <h1 className="text-sm font-semibold">
-                        Classifica ingredienti – pizze per giorno della settimana
+                        Classifica utenti – pizze per giorno della settimana
                     </h1>
                     <p className="text-[11px] text-slate-400">
                         Utenti ordinati per numero di pizze mangiate nel giorno selezionato, limitatamente al periodo ({periodLabel}).
@@ -278,7 +294,7 @@ export default function TopIngredientsByCountPage() {
                     </p>
                 ) : leaderboard.length === 0 ? (
                     <p className="text-sm text-slate-400">
-                        Nessun ingrediente ha pizze associate in questo periodo.
+                        Nessun utente ha pizze associate in questo periodo.
                     </p>
                 ) : (
                     <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4 flex flex-col gap-3">
@@ -321,7 +337,7 @@ export default function TopIngredientsByCountPage() {
                                     type="text"
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
-                                    placeholder="Cerca ingrediente..."
+                                    placeholder="Cerca utente..."
                                     className="px-2 py-1 rounded-full bg-slate-950 border border-slate-700 text-[11px] focus:outline-none focus:ring focus:ring-slate-500"
                                 />
                                 <button
@@ -377,21 +393,33 @@ export default function TopIngredientsByCountPage() {
                             {displayedLeaderboard.map(row => {
                                 const globalIndex =
                                     leaderboard.findIndex(
-                                        r => r.ingredientId === row.ingredientId
+                                        r => r.userId === row.userId
                                     ) + 1;
+
+                                const displayName = row.displayName || row.username || 'Anonimo';
+                                const linkHref = row.username ? `/u/${row.username}` : '#';
 
                                 return (
                                     <li
-                                        key={row.ingredientId}
+                                        key={row.userId}
                                         className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-700"
                                     >
                                         <div className="flex items-center gap-3">
                                             <span className="text-xs w-8 text-slate-400">
                                                 #{globalIndex}
                                             </span>
-                                            <span className="text-sm text-slate-100">
-                                                {row.name}
-                                            </span>
+                                            {row.username ? (
+                                                <Link 
+                                                    href={linkHref}
+                                                    className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                                                >
+                                                    {displayName}
+                                                </Link>
+                                            ) : (
+                                                <span className="text-sm text-slate-100">
+                                                    {displayName}
+                                                </span>
+                                            )}
                                         </div>
                                         <span className="text-sm font-semibold">
                                             {row.count} pizze il {['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'][weekday]}
