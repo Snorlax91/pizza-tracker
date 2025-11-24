@@ -336,6 +336,12 @@ export default function GroupDetailPage() {
 
         if (pizzasError) throw pizzasError;
 
+        console.log('🔍 === DEBUG GRAFICO PIZZE/SETTIMANA ===');
+        console.log('📅 Anno:', year);
+        console.log('📊 Modalità grafico:', chartMode);
+        console.log('👥 Partecipanti:', participantIds.length, participantIds);
+        console.log('🍕 Pizze caricate dal DB:', pizzas?.length || 0);
+
         // organizza pizze per settimana e utente
         // Usa il numero di settimana ISO come chiave
         const weeklyCountsMap: Record<number, Record<string, number>> = {};
@@ -348,10 +354,14 @@ export default function GroupDetailPage() {
           });
         }
 
+        // Log delle prime pizze per debugging
+        console.log('🍕 Prime 5 pizze (sample):', pizzas?.slice(0, 5));
+
         (pizzas ?? []).forEach(pizza => {
           if (!pizza.eaten_at || !pizza.user_id) return;
           const date = new Date(pizza.eaten_at);
           const weekNum = getWeekNumber(date);
+          console.log(`  Pizza: ${pizza.eaten_at} -> Settimana ${weekNum}`);
           if (weekNum >= 1 && weekNum <= 53 && participantIds.includes(pizza.user_id)) {
             weeklyCountsMap[weekNum][pizza.user_id] = 
               (weeklyCountsMap[weekNum][pizza.user_id] || 0) + 1;
@@ -362,11 +372,14 @@ export default function GroupDetailPage() {
         let firstWeek = 1;
         let lastWeek = weeksInYear;
         
+        console.log('📈 Settimane totali nell\'anno:', weeksInYear);
+        
         // Opzionale: trova la prima settimana con almeno una pizza
         for (let w = 1; w <= weeksInYear; w++) {
           const hasData = participantIds.some(uid => weeklyCountsMap[w][uid] > 0);
           if (hasData) {
             firstWeek = w;
+            console.log(`✅ Prima settimana con dati: ${w}`);
             break;
           }
         }
@@ -376,12 +389,29 @@ export default function GroupDetailPage() {
           const hasData = participantIds.some(uid => weeklyCountsMap[w][uid] > 0);
           if (hasData) {
             lastWeek = w;
+            console.log(`✅ Ultima settimana con dati: ${w}`);
             break;
+          }
+        }
+
+        console.log(`📊 Range settimane da visualizzare: ${firstWeek} -> ${lastWeek}`);
+        
+        // Mostra il contenuto della mappa per le settimane rilevanti
+        console.log('🗺️ WeeklyCountsMap (settimane con dati):');
+        for (let w = firstWeek; w <= lastWeek; w++) {
+          const weekData = weeklyCountsMap[w];
+          const totalPizzas = Object.values(weekData).reduce((sum, count) => sum + count, 0);
+          if (totalPizzas > 0) {
+            console.log(`  Settimana ${w}:`, weekData, `(totale: ${totalPizzas} pizze)`);
           }
         }
 
         // calcola i dati settimanali in base al chartMode
         const weekly: WeeklyData[] = [];
+        
+        console.log('🔄 Inizio calcolo cumulativo...');
+        
+        console.log('🔄 Inizio calcolo cumulativo...');
         
         for (let w = firstWeek; w <= lastWeek; w++) {
           const weekLabel = `S${w}`;
@@ -399,6 +429,8 @@ export default function GroupDetailPage() {
                 cumulativeCounts[uid] += weeklyCountsMap[i][uid] || 0;
               });
             }
+
+            console.log(`  ${weekLabel} cumulativo:`, cumulativeCounts);
 
             weekly.push({
               weekNumber: w,
@@ -436,6 +468,10 @@ export default function GroupDetailPage() {
             });
           }
         }
+
+        console.log('✅ Dati settimanali finali (weekly array):', weekly);
+        console.log('📊 Numero di punti sul grafico:', weekly.length);
+        console.log('🔍 === FINE DEBUG ===');
 
         setWeeklyData(weekly);
       } catch (err) {
