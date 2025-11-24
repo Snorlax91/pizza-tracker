@@ -51,6 +51,8 @@ export default function TopPizzasUsersPage() {
     null
   );
   const [searchError, setSearchError] = useState<string | null>(null);
+  
+  const [includeBaseCount, setIncludeBaseCount] = useState(false);
 
   // 1) Carica utente loggato
   useEffect(() => {
@@ -124,6 +126,22 @@ export default function TopPizzasUsersPage() {
           counts[r.user_id] = (counts[r.user_id] || 0) + 1;
         });
 
+        // Se includiamo i contatori iniziali, aggiungiamo i base_count
+        if (includeBaseCount) {
+          const { data: yearlyData, error: yearlyError } = await supabase
+            .from('user_yearly_counters')
+            .select('user_id, base_count')
+            .eq('year', year);
+
+          if (!yearlyError && yearlyData) {
+            yearlyData.forEach((row: any) => {
+              const uid = row.user_id as string;
+              const base = (row.base_count as number) || 0;
+              counts[uid] = (counts[uid] || 0) + base;
+            });
+          }
+        }
+
         const lb: LeaderboardRow[] = Object.entries(counts)
           .map(([uid, count]) => ({ userId: uid, count }))
           .sort((a, b) => b.count - a.count);
@@ -143,7 +161,7 @@ export default function TopPizzasUsersPage() {
     if (userId) {
       loadPizzas();
     }
-  }, [userId, year, month]);
+  }, [userId, year, month, includeBaseCount]);
 
   // 3) Carica profili di tutti gli userId presenti in leaderboard
   useEffect(() => {
@@ -372,6 +390,21 @@ export default function TopPizzasUsersPage() {
               <option value={12}>Dic</option>
             </select>
           </div>
+          
+          {/* Toggle contatori iniziali */}
+          {month === 'all' && (
+            <button
+              type="button"
+              onClick={() => setIncludeBaseCount(!includeBaseCount)}
+              className={`px-3 py-1.5 rounded-lg border text-[11px] font-medium transition ${
+                includeBaseCount
+                  ? 'bg-amber-400/20 border-amber-400/50 text-amber-200'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              {includeBaseCount ? '✓ ' : ''}Includi pizze non registrate
+            </button>
+          )}
         </div>
 
         {errorMsg && (
@@ -560,9 +593,9 @@ export default function TopPizzasUsersPage() {
             )}
 
             <p className="mt-2 text-[11px] text-slate-500">
-              La classifica considera solo le pizze effettivamente
-              registrate nel periodo, non i contatori iniziali impostati
-              manualmente.
+              {includeBaseCount
+                ? 'La classifica include sia le pizze registrate che i contatori iniziali impostati manualmente dagli utenti.'
+                : 'La classifica considera solo le pizze effettivamente registrate nel periodo, non i contatori iniziali impostati manualmente.'}
             </p>
           </div>
         )}
