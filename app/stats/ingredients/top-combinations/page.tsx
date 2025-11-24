@@ -18,6 +18,9 @@ const PAGE_SIZE = 50;
 // Emoji per ingredienti
 const INGREDIENT_EMOJI_MAP: Record<string, string> = {
   // classici
+  'pomodoro': '🍅',
+  'pomodori': '🍅',
+  'mozzarella': '🧀',
   'cipolla': '🧅',
   'cipolle': '🧅',
   'salame': '🍖',

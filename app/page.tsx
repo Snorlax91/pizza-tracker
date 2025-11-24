@@ -75,6 +75,9 @@ const CURRENT_YEAR = new Date().getFullYear();
 // Mapping ingredienti → emoji
 const INGREDIENT_EMOJI_MAP: Record<string, string> = {
   // classici
+  'pomodoro': '🍅',
+  'pomodori': '🍅',
+  'mozzarella': '🧀',
   'cipolla': '🧅',
   'cipolle': '🧅',
   'salame': '🍖',
