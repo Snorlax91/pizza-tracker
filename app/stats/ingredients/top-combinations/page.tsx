@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { AppHeader } from '@/components/AppHeader';
 import Link from 'next/link';
+import { getIngredientEmoji } from '@/lib/ingredientEmojis';
 
 type CombinationRow = {
   ingredients: Array<{ id: number; name: string }>;
@@ -14,72 +15,6 @@ type ViewMode = 'top' | 'all';
 
 const CURRENT_YEAR = new Date().getFullYear();
 const PAGE_SIZE = 50;
-
-// Emoji per ingredienti
-const INGREDIENT_EMOJI_MAP: Record<string, string> = {
-  // classici
-  'pomodoro': '🍅',
-  'pomodori': '🍅',
-  'mozzarella': '🧀',
-  'cipolla': '🧅',
-  'cipolle': '🧅',
-  'salame': '🍖',
-  'salame piccante': '🌶️',
-  'salamino piccante': '🌶️',
-  'salsiccia': '🥩',
-  'wurstel': '🌭',
-  'wurstel di pollo': '🌭',
-  'prosciutto': '🥓',
-  'prosciutto cotto': '🥓',
-  'prosciutto crudo': '🥓',
-  'speck': '🥓',
-
-  // verdure
-  'funghi': '🍄',
-  'carciofi': '🫒',
-  'carciofo': '🫒',
-  'zucchine': '🥒',
-  'zucchina': '🥒',
-  'melanzane': '🍆',
-  'melanzana': '🍆',
-  'peperoni': '🫑',
-  'peperone': '🫑',
-  'rucola': '🥬',
-  'insalata': '🥬',
-  'basilico': '🌿',
-
-  // mare
-  'tonno': '🐟',
-  'acciughe': '🐟',
-  'acciuga': '🐟',
-  'gamberi': '🦐',
-
-  // extra
-  'olive': '🫒',
-  'olive nere': '🫒',
-  'olive verdi': '🫒',
-  'mais': '🌽',
-  'ananas': '🍍',
-  'gorgonzola': '🧀',
-  'mozzarella di bufala': '🧀',
-  'bufala': '🧀',
-
-  // patate 😁
-  'patatine fritte': '🍟',
-  'patate fritte': '🍟',
-  'patate': '🥔',
-  'patate al forno': '🥔',
-  'patate arrosto': '🥔',
-};
-
-function getIngredientEmoji(name?: string | null): string {
-  if (!name) return '🍕';
-  let n = name.toLowerCase().trim();
-  n = n
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, ''); // rimuove accenti
-  return INGREDIENT_EMOJI_MAP[n] ?? '🍕';
-}
 
 export default function TopCombinationsPage() {
   const [year, setYear] = useState(CURRENT_YEAR);

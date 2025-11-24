@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { PizzaDetailsPanel } from '@/components/PizzaDetailsPanel';
 import Link from 'next/link';
 import { AppHeader } from '@/components/AppHeader';
+import { getIngredientEmoji } from '@/lib/ingredientEmojis';
 
 type User = {
   id: string;
@@ -71,74 +72,6 @@ const MONTH_LABELS = [
 ];
 
 const CURRENT_YEAR = new Date().getFullYear();
-
-// Mapping ingredienti → emoji
-const INGREDIENT_EMOJI_MAP: Record<string, string> = {
-  // classici
-  'pomodoro': '🍅',
-  'pomodori': '🍅',
-  'mozzarella': '🧀',
-  'cipolla': '🧅',
-  'cipolle': '🧅',
-  'salame': '🍖',
-  'salame piccante': '🌶️',
-  'salamino piccante': '🌶️',
-  'salsiccia': '🥩',
-  'wurstel': '🌭',
-  'wurstel di pollo': '🌭',
-  'prosciutto': '🥓',
-  'prosciutto cotto': '🥓',
-  'prosciutto crudo': '🥓',
-  'speck': '🥓',
-
-  // verdure
-  'funghi': '🍄',
-  'carciofi': '🫒',
-  'carciofo': '🫒',
-  'zucchine': '🥒',
-  'zucchina': '🥒',
-  'melanzane': '🍆',
-  'melanzana': '🍆',
-  'peperoni': '🫑',
-  'peperone': '🫑',
-  'rucola': '🥬',
-  'insalata': '🥬',
-  'basilico': '🌿',
-
-  // mare
-  'tonno': '🐟',
-  'acciughe': '🐟',
-  'acciuga': '🐟',
-  'gamberi': '🦐',
-
-  // extra
-  'olive': '🫒',
-  'olive nere': '🫒',
-  'olive verdi': '🫒',
-  'mais': '🌽',
-  'ananas': '🍍',
-  'gorgonzola': '🧀',
-  'mozzarella di bufala': '🧀',
-  'bufala': '🧀',
-  'patatine fritte': '🍟',
-  'patate fritte': '🍟',
-  'patate': '🥔',
-  'patate al forno': '🥔',
-  'patate arrosto': '🥔',
-  'patate lesse': '🥔',
-};
-
-function getIngredientEmoji(name?: string | null): string {
-  if (!name) return '🍕';
-  // normalizziamo un minimo (minuscolo + tolgo accenti)
-  let n = name.toLowerCase().trim();
-  n = n
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, ''); // rimuove accenti tipo 'pèperòni'
-
-  return INGREDIENT_EMOJI_MAP[n] ?? '🍕';
-}
-
 
 // Hook per gestire contatori annuali (base_count + pizze)
 function useYearlyPizzaStats(userId?: string) {

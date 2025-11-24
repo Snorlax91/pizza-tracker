@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { PizzaDetailsPanel } from '@/components/PizzaDetailsPanel';
 import { AppHeader } from '@/components/AppHeader';
+import { getIngredientEmoji } from '@/lib/ingredientEmojis';
 
 
 type User = {
@@ -268,12 +269,15 @@ export default function PizzasPage() {
                                     {pizza.ingredients.length > 0 && (
                                         <div className="flex flex-wrap gap-1 mb-1">
                                             {pizza.ingredients.map(ing => (
-                                                <span
+                                                <Link
                                                     key={ing.id}
-                                                    className="px-2 py-0.5 rounded-full text-[10px] bg-slate-900 border border-slate-600 text-slate-100"
+                                                    href={`/stats/ingredients/${ing.id}`}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="px-2 py-0.5 rounded-full text-[10px] bg-slate-900 border border-slate-600 text-slate-100 hover:bg-slate-800 hover:border-amber-500 transition flex items-center gap-1"
                                                 >
-                                                    {ing.name}
-                                                </span>
+                                                    <span>{getIngredientEmoji(ing.name)}</span>
+                                                    <span>{ing.name}</span>
+                                                </Link>
                                             ))}
                                         </div>
                                     )}
