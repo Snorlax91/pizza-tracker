@@ -604,7 +604,7 @@ export default function IngredientProfilePage() {
                                                 )}
                                             </div>
                                             <span className="text-slate-300">
-                                                {u.count} pizza{u.count === 1 ? '' : 'e'}
+                                                {u.count} pizz{u.count === 1 ? 'a' : 'e'}
                                             </span>
                                         </li>
                                     );
