@@ -495,8 +495,10 @@ export default function GroupDetailPage() {
   };
 
   const getWeeksInYear = (year: number): number => {
-    const lastDay = new Date(year, 11, 31);
-    return getWeekNumber(lastDay);
+    // Trova l'ultima settimana che appartiene effettivamente a questo anno
+    // Prova il 28 dicembre, che è sempre nell'ultima settimana dell'anno ISO
+    const dec28 = new Date(year, 11, 28);
+    return getWeekNumber(dec28);
   };
 
   // indice del mio utente in classifica
