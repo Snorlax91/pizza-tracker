@@ -783,23 +783,17 @@ export default function Home() {
           if (pizzasError) throw pizzasError;
           setGlobalPizzasCurrentYear(pizzasCount ?? 0);
 
-          // Conta gli ingredienti distinti usati nell'anno corrente
-          const { data: ingredientsData, error: ingredientsError } = await supabase
+          // Conta TUTTI gli ingredienti usati nell'anno corrente (anche se ripetuti)
+          const { count: ingredientsCount, error: ingredientsError } = await supabase
             .from('pizza_ingredients')
-            .select('ingredient_id, pizzas!inner(eaten_at)')
+            .select('id', { count: 'exact', head: true })
             .gte('pizzas.eaten_at', startYear)
-            .lte('pizzas.eaten_at', endYear);
+            .lte('pizzas.eaten_at', endYear)
+            .not('pizzas', 'is', null);
 
           if (ingredientsError) throw ingredientsError;
 
-          const uniqueIngredients = new Set<number>();
-          (ingredientsData ?? []).forEach((row: any) => {
-            if (row.ingredient_id) {
-              uniqueIngredients.add(row.ingredient_id);
-            }
-          });
-
-          setGlobalIngredientsCurrentYear(uniqueIngredients.size);
+          setGlobalIngredientsCurrentYear(ingredientsCount ?? 0);
         } catch (e) {
           console.warn('Impossibile calcolare contatori globali', e);
         } finally {
@@ -1187,33 +1181,36 @@ export default function Home() {
               </div>
 
               {/* Colonna destra: Contatori globali */}
-              <div className="flex flex-col gap-3 min-w-[200px]">
-                <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/20 border-2 border-amber-500/30 rounded-2xl p-4 text-center">
-                  <p className="text-[10px] uppercase tracking-wider text-amber-300/80 font-semibold mb-1">
-                    Pizze nel {new Date().getFullYear()}
-                  </p>
-                  {loadingGlobalStats ? (
-                    <p className="text-2xl font-black text-amber-400">...</p>
-                  ) : (
-                    <p className="text-4xl font-black text-amber-400">
-                      {globalPizzasCurrentYear.toLocaleString('it-IT')}
+              <div className="flex flex-col md:flex-col gap-3 md:min-w-[200px]">
+                {/* Su mobile affianchiamo i due contatori */}
+                <div className="grid grid-cols-2 md:grid-cols-1 gap-3">
+                  <div className="bg-gradient-to-br from-amber-500/20 to-orange-600/20 border-2 border-amber-500/30 rounded-2xl p-4 text-center">
+                    <p className="text-[10px] uppercase tracking-wider text-amber-300/80 font-semibold mb-1">
+                      Pizze nel {new Date().getFullYear()}
                     </p>
-                  )}
-                  <p className="text-[9px] text-slate-400 mt-1">🌍 Globale</p>
-                </div>
+                    {loadingGlobalStats ? (
+                      <p className="text-2xl font-black text-amber-400">...</p>
+                    ) : (
+                      <p className="text-4xl font-black text-amber-400">
+                        {globalPizzasCurrentYear.toLocaleString('it-IT')}
+                      </p>
+                    )}
+                    <p className="text-[9px] text-slate-400 mt-1">🌍 Globale</p>
+                  </div>
 
-                <div className="bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border-2 border-emerald-500/30 rounded-2xl p-4 text-center">
-                  <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold mb-1">
-                    Ingredienti {new Date().getFullYear()}
-                  </p>
-                  {loadingGlobalStats ? (
-                    <p className="text-2xl font-black text-emerald-400">...</p>
-                  ) : (
-                    <p className="text-4xl font-black text-emerald-400">
-                      {globalIngredientsCurrentYear}
+                  <div className="bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border-2 border-emerald-500/30 rounded-2xl p-4 text-center">
+                    <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-semibold mb-1">
+                      Ingredienti {new Date().getFullYear()}
                     </p>
-                  )}
-                  <p className="text-[9px] text-slate-400 mt-1">🌍 Globale</p>
+                    {loadingGlobalStats ? (
+                      <p className="text-2xl font-black text-emerald-400">...</p>
+                    ) : (
+                      <p className="text-4xl font-black text-emerald-400">
+                        {globalIngredientsCurrentYear.toLocaleString('it-IT')}
+                      </p>
+                    )}
+                    <p className="text-[9px] text-slate-400 mt-1">🌍 Globale</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1226,6 +1223,9 @@ export default function Home() {
         <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
           {/* Colonna sinistra (desktop): mese scorso + settimana scorsa */}
           <div className="hidden md:flex flex-col gap-3">
+            <h2 className="text-sm font-semibold text-slate-300 mb-1">
+              In evidenza il mese scorso
+            </h2>
             {loadingIngredientMoments ? (
               <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 text-[11px] text-slate-400">
                 Carico i tuoi ingredienti del momento...
@@ -1395,6 +1395,9 @@ export default function Home() {
 
           {/* Colonna destra (desktop): mese corrente + settimana corrente */}
           <div className="hidden md:flex flex-col gap-3">
+            <h2 className="text-sm font-semibold text-slate-300 mb-1">
+              In evidenza questo mese
+            </h2>
             {loadingIngredientMoments ? (
               <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 text-[11px] text-slate-400">
                 Carico i tuoi ingredienti del momento...
