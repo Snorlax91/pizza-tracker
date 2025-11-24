@@ -69,6 +69,7 @@ const WEEKDAY_LABELS_SHORT = ['D', 'L', 'M', 'M', 'G', 'V', 'S'];
 export default function GlobalStatsPage() {
     const router = useRouter();
 
+    const [user, setUser] = useState<any>(null);
     const [year, setYear] = useState(CURRENT_YEAR);
     const [month, setMonth] = useState<number | 'all'>('all'); // 1-12 o 'all'
     const [loading, setLoading] = useState(false);
@@ -85,6 +86,15 @@ export default function GlobalStatsPage() {
     // selezioni specifiche per alcune card
     const [usersWeekday, setUsersWeekday] = useState<number>(1); // 1 = lunedì
     const [ingredientsWeekday, setIngredientsWeekday] = useState<number>(1);
+
+    // Check user authentication
+    useEffect(() => {
+        const checkUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUser(user);
+        };
+        checkUser();
+    }, []);
 
     // caricamento dati base (pizze + ingredienti) per periodo globale
     useEffect(() => {
@@ -598,7 +608,7 @@ export default function GlobalStatsPage() {
         <>
             <LoginPromptModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
             <main className="min-h-screen bg-slate-900 text-slate-100">
-                <AppHeader isLoggedIn={false} onLoginClick={() => setShowLoginModal(true)} />
+                <AppHeader isLoggedIn={!!user} onLoginClick={() => setShowLoginModal(true)} />
                 <div className="max-w-5xl mx-auto px-4 py-6 space-y-5">
                 {/* Controlli globali periodo / provenienza */}
                 <div className="flex flex-wrap items-center gap-3 mb-2 text-xs">

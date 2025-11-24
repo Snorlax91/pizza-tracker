@@ -8,10 +8,12 @@ export default function AuthPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [loading, setLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [signupSuccess, setSignupSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,21 +22,35 @@ export default function AuthPage() {
 
     try {
       if (mode === 'signup') {
+        // Validazione conferma password
+        if (password !== confirmPassword) {
+          throw new Error('Le password non coincidono');
+        }
+
+        if (password.length < 6) {
+          throw new Error('La password deve essere di almeno 6 caratteri');
+        }
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
+        
+        // Mostra messaggio di successo invece di redirect
+        setSignupSuccess(true);
+        setLoading(false);
+        return;
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+        
+        router.push('/');
+        router.refresh();
       }
-
-      router.push('/');
-      router.refresh();
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message ?? 'Errore durante l’operazione.');
@@ -78,10 +94,41 @@ export default function AuthPage() {
           Pizza Tracker 🍕
         </h1>
 
-        <div className="flex justify-center gap-2 mb-6">
-          <button
-            type="button"
-            onClick={() => setMode('login')}
+        {signupSuccess ? (
+          // Schermata di successo dopo registrazione
+          <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-6 text-center">
+            <div className="text-6xl mb-4">✅</div>
+            <h2 className="text-2xl font-bold mb-3">Registrazione completata!</h2>
+            <div className="text-slate-300 space-y-3 mb-6">
+              <p>
+                Abbiamo inviato un&apos;email di conferma all&apos;indirizzo che hai fornito.
+              </p>
+              <p className="font-semibold text-amber-400">
+                ⚠️ Controlla anche la cartella SPAM!
+              </p>
+              <p>
+                Clicca sul link nell&apos;email per verificare il tuo account, poi potrai accedere normalmente.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setSignupSuccess(false);
+                setMode('login');
+                setEmail('');
+                setPassword('');
+                setConfirmPassword('');
+              }}
+              className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-900 font-semibold hover:bg-white transition"
+            >
+              Torna al Login
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex justify-center gap-2 mb-6">
+              <button
+                type="button"
+                onClick={() => setMode('login')}
             className={`px-4 py-2 rounded-full text-sm font-semibold border ${
               mode === 'login'
                 ? 'bg-slate-100 text-slate-900'
@@ -184,6 +231,20 @@ export default function AuthPage() {
             />
           </div>
 
+          {mode === 'signup' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-slate-300">Conferma Password</label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                className="px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-sm focus:outline-none focus:ring focus:ring-slate-500"
+              />
+            </div>
+          )}
+
           {errorMsg && (
             <p className="text-sm text-red-400">{errorMsg}</p>
           )}
@@ -204,6 +265,8 @@ export default function AuthPage() {
         <p className="mt-4 text-center text-sm text-slate-400">
           Dopo l&apos;accesso verrai portato alla tua dashboard delle pizze.
         </p>
+        </>
+        )}
       </div>
     </main>
   );
