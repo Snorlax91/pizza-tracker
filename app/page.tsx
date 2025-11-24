@@ -1396,7 +1396,7 @@ export default function Home() {
 
               <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-5 mb-4">
                 <p className="text-sm text-slate-400 mb-1">
-                  Pizze mangiate nel {year}
+                  Pizze mangiate da te nel {year}
                 </p>
                 <p className="text-5xl font-black mb-2">
                   {loadingCounter ? '...' : total}
