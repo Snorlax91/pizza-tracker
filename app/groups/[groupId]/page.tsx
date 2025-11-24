@@ -337,9 +337,11 @@ export default function GroupDetailPage() {
         if (pizzasError) throw pizzasError;
 
         // organizza pizze per settimana e utente
+        // Usa il numero di settimana ISO come chiave
         const weeklyCountsMap: Record<number, Record<string, number>> = {};
         
-        for (let w = 1; w <= weeksInYear; w++) {
+        // Inizializza tutte le settimane possibili (da 1 a 53)
+        for (let w = 1; w <= 53; w++) {
           weeklyCountsMap[w] = {};
           participantIds.forEach(uid => {
             weeklyCountsMap[w][uid] = 0;
@@ -350,16 +352,38 @@ export default function GroupDetailPage() {
           if (!pizza.eaten_at || !pizza.user_id) return;
           const date = new Date(pizza.eaten_at);
           const weekNum = getWeekNumber(date);
-          if (weekNum >= 1 && weekNum <= weeksInYear && participantIds.includes(pizza.user_id)) {
+          if (weekNum >= 1 && weekNum <= 53 && participantIds.includes(pizza.user_id)) {
             weeklyCountsMap[weekNum][pizza.user_id] = 
               (weeklyCountsMap[weekNum][pizza.user_id] || 0) + 1;
           }
         });
 
+        // Trova la prima e l'ultima settimana con dati
+        let firstWeek = 1;
+        let lastWeek = weeksInYear;
+        
+        // Opzionale: trova la prima settimana con almeno una pizza
+        for (let w = 1; w <= weeksInYear; w++) {
+          const hasData = participantIds.some(uid => weeklyCountsMap[w][uid] > 0);
+          if (hasData) {
+            firstWeek = w;
+            break;
+          }
+        }
+        
+        // Trova l'ultima settimana con almeno una pizza
+        for (let w = weeksInYear; w >= 1; w--) {
+          const hasData = participantIds.some(uid => weeklyCountsMap[w][uid] > 0);
+          if (hasData) {
+            lastWeek = w;
+            break;
+          }
+        }
+
         // calcola i dati settimanali in base al chartMode
         const weekly: WeeklyData[] = [];
         
-        for (let w = 1; w <= weeksInYear; w++) {
+        for (let w = firstWeek; w <= lastWeek; w++) {
           const weekLabel = `S${w}`;
           
           if (chartMode === 'pizzas') {
