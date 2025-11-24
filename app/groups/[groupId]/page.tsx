@@ -323,45 +323,6 @@ export default function GroupDetailPage() {
           }
         }
 
-        // DATI FITTIZI PER TEST
-        console.log('🧪 Caricamento dati fittizi per test grafico');
-        const currentWeek = getWeekNumber(new Date());
-        const startWeek = Math.max(1, currentWeek - 10);
-        const testWeekly: WeeklyData[] = [];
-        
-        for (let w = startWeek; w <= currentWeek; w++) {
-          const weekData: Record<string, number> = {};
-          
-          participantIds.forEach((uid, idx) => {
-            if (chartMode === 'pizzas') {
-              // Genera un numero crescente di pizze
-              const base = idx * 5;
-              const increment = (w - startWeek) * (idx + 1);
-              weekData[uid] = base + increment;
-            } else {
-              // Genera posizioni che cambiano leggermente
-              const basePos = idx + 1;
-              const variation = Math.sin(w / 2) * 2;
-              weekData[uid] = Math.max(1, Math.round(basePos + variation));
-            }
-          });
-          
-          testWeekly.push({
-            weekNumber: w,
-            weekLabel: `S${w}`,
-            data: weekData,
-          });
-        }
-        
-        console.log('🧪 Dati fittizi generati:', testWeekly.length, 'settimane');
-        console.log('🧪 Prima settimana:', testWeekly[0]);
-        console.log('🧪 Ultima settimana:', testWeekly[testWeekly.length - 1]);
-        
-        setWeeklyData(testWeekly);
-        setLoadingChart(false);
-        return;
-        // FINE DATI FITTIZI
-
         // calcola il numero di settimane nell'anno
         const weeksInYear = getWeeksInYear(year);
         
@@ -432,8 +393,8 @@ export default function GroupDetailPage() {
               cumulativeCounts[uid] = 0;
             });
 
-            // somma tutte le pizze fino a questa settimana
-            for (let i = 1; i <= w; i++) {
+            // somma tutte le pizze dalla prima settimana con dati fino a questa settimana
+            for (let i = firstWeek; i <= w; i++) {
               participantIds.forEach(uid => {
                 cumulativeCounts[uid] += weeklyCountsMap[i][uid] || 0;
               });
@@ -451,8 +412,8 @@ export default function GroupDetailPage() {
               cumulativeCounts[uid] = 0;
             });
 
-            // somma tutte le pizze fino a questa settimana
-            for (let i = 1; i <= w; i++) {
+            // somma tutte le pizze dalla prima settimana con dati fino a questa settimana
+            for (let i = firstWeek; i <= w; i++) {
               participantIds.forEach(uid => {
                 cumulativeCounts[uid] += weeklyCountsMap[i][uid] || 0;
               });
