@@ -13,7 +13,6 @@ type LocalPizzaData = {
 export function LocalPizzaCounter() {
   const [year, setYear] = useState(CURRENT_YEAR);
   const [count, setCount] = useState(0);
-  const [showInfo, setShowInfo] = useState(false);
 
   // Carica i dati dal localStorage
   useEffect(() => {
@@ -57,100 +56,87 @@ export function LocalPizzaCounter() {
 
   return (
     <div className="w-full max-w-md mx-auto">
-      <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-3xl p-8 shadow-2xl">
-        {/* Info Badge */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-full">
-            <span>📊</span>
-            <span>Modalità Demo</span>
-          </div>
-          <button
-            onClick={() => setShowInfo(!showInfo)}
-            className="text-slate-400 hover:text-slate-200 transition-colors"
-            title="Informazioni"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
-          </button>
-        </div>
-
-        {showInfo && (
-          <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-xs text-slate-300">
-            <p className="mb-2">
-              ℹ️ Stai usando la <strong>modalità demo</strong>. I dati sono salvati solo sul tuo browser.
-            </p>
+      {/* Info Badge - Modalità Demo */}
+      <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-xs text-slate-300">
+        <div className="flex items-start gap-2">
+          <span className="text-base">ℹ️</span>
+          <div>
+            <p className="font-semibold mb-1">Modalità Demo</p>
             <p className="text-slate-400">
-              Registrati per salvare le tue pizze nel cloud, aggiungere foto, ingredienti e competere nelle classifiche!
+              I dati sono salvati solo sul tuo browser. Registrati per salvare nel cloud, aggiungere foto, ingredienti e competere nelle classifiche!
             </p>
           </div>
-        )}
-
-        {/* Year Selector */}
-        <div className="flex items-center justify-center gap-3 mb-6">
-          <button
-            onClick={() => setYear(y => y - 1)}
-            className="px-3 py-2 rounded-full border border-slate-600 hover:bg-slate-700 transition-colors"
-            aria-label="Anno precedente"
-          >
-            <span className="text-lg">◀</span>
-          </button>
-          <span className="text-2xl font-bold text-slate-100 min-w-[100px] text-center">
-            {year}
-          </span>
-          <button
-            onClick={() => setYear(y => y + 1)}
-            className="px-3 py-2 rounded-full border border-slate-600 hover:bg-slate-700 transition-colors"
-            aria-label="Anno successivo"
-          >
-            <span className="text-lg">▶</span>
-          </button>
         </div>
+      </div>
 
-        {/* Counter Display */}
-        <div className="text-center mb-8">
-          <div className="text-7xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent mb-2">
-            {count}
-          </div>
-          <p className="text-lg text-slate-400">
-            {count === 1 ? 'pizza mangiata' : 'pizze mangiate'}
-          </p>
-        </div>
+      {/* Selettore anno */}
+      <div className="flex items-center justify-center gap-3 mb-4">
+        <button
+          onClick={() => setYear(y => y - 1)}
+          className="px-3 py-1 rounded-full border border-slate-700 text-sm hover:bg-slate-800"
+          aria-label="Anno precedente"
+        >
+          ◀
+        </button>
+        <span className="text-sm text-slate-300">
+          Pizze dell&apos;anno{' '}
+          <span className="font-semibold text-slate-50">{year}</span>
+        </span>
+        <button
+          onClick={() => setYear(y => y + 1)}
+          className="px-3 py-1 rounded-full border border-slate-700 text-sm hover:bg-slate-800"
+          aria-label="Anno successivo"
+        >
+          ▶
+        </button>
+      </div>
 
-        {/* Counter Controls */}
-        <div className="flex items-center justify-center gap-4">
-          <button
-            onClick={handleSubtract}
-            disabled={count === 0}
-            className="w-14 h-14 rounded-full bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center text-2xl font-bold shadow-lg hover:shadow-xl"
-            aria-label="Rimuovi una pizza"
-          >
-            −
-          </button>
-          <button
-            onClick={handleAdd}
-            className="w-16 h-16 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all flex items-center justify-center text-3xl font-bold shadow-lg hover:shadow-xl"
-            aria-label="Aggiungi una pizza"
-          >
-            +
-          </button>
-        </div>
+      {/* Counter Display - Stesso stile del counter loggato */}
+      <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-5 mb-4">
+        <p className="text-sm text-slate-400 mb-1">
+          Pizze mangiate da te nel {year}
+        </p>
+        <p className="text-5xl font-black mb-2">
+          {count}
+        </p>
+        <p className="text-xs text-slate-400">
+          Conteggio salvato localmente sul tuo browser.
+        </p>
+      </div>
 
-        {/* Upgrade CTA */}
-        <div className="mt-8 pt-6 border-t border-slate-700">
-          <p className="text-xs text-slate-400 text-center mb-3">
-            Vuoi salvare anche foto, ingredienti e voti?
-          </p>
-          <button
-            onClick={() => {
-              // Questo verrà gestito dal parent component
-              window.dispatchEvent(new CustomEvent('showLoginModal'));
-            }}
-            className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg text-sm"
-          >
-            ✨ Sblocca tutte le funzionalità
-          </button>
-        </div>
+      {/* Bottone +1 Pizza */}
+      <button
+        onClick={handleAdd}
+        className="w-full py-4 rounded-2xl bg-amber-400 text-slate-900 font-bold text-xl shadow-lg shadow-amber-500/30 hover:bg-amber-300 transition mb-3"
+        aria-label="Aggiungi una pizza"
+      >
+        +1 Pizza
+      </button>
+
+      {/* Bottone Annulla */}
+      <button
+        onClick={handleSubtract}
+        disabled={count === 0}
+        className="w-full py-2 rounded-xl text-xs border border-slate-700 text-slate-300 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+        aria-label="Rimuovi una pizza"
+      >
+        Annulla ultima pizza
+      </button>
+
+      {/* Upgrade CTA */}
+      <div className="mt-4 pt-4 border-t border-slate-700">
+        <p className="text-xs text-slate-400 text-center mb-3">
+          Vuoi salvare anche foto, ingredienti e voti?
+        </p>
+        <button
+          onClick={() => {
+            // Questo verrà gestito dal parent component
+            window.dispatchEvent(new CustomEvent('showLoginModal'));
+          }}
+          className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold rounded-xl transition-all shadow-md hover:shadow-lg text-sm"
+        >
+          ✨ Sblocca tutte le funzionalità
+        </button>
       </div>
     </div>
   );
