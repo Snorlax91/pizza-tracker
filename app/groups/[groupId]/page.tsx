@@ -347,10 +347,10 @@ export default function GroupDetailPage() {
         }
 
         (pizzas ?? []).forEach(pizza => {
-          if (!pizza.eaten_at) return;
+          if (!pizza.eaten_at || !pizza.user_id) return;
           const date = new Date(pizza.eaten_at);
           const weekNum = getWeekNumber(date);
-          if (weekNum >= 1 && weekNum <= weeksInYear) {
+          if (weekNum >= 1 && weekNum <= weeksInYear && participantIds.includes(pizza.user_id)) {
             weeklyCountsMap[weekNum][pizza.user_id] = 
               (weeklyCountsMap[weekNum][pizza.user_id] || 0) + 1;
           }
@@ -363,11 +363,23 @@ export default function GroupDetailPage() {
           const weekLabel = `S${w}`;
           
           if (chartMode === 'pizzas') {
-            // conta pizze per settimana
+            // conta pizze per settimana (cumulativo per vedere la crescita)
+            const cumulativeCounts: Record<string, number> = {};
+            participantIds.forEach(uid => {
+              cumulativeCounts[uid] = 0;
+            });
+
+            // somma tutte le pizze fino a questa settimana
+            for (let i = 1; i <= w; i++) {
+              participantIds.forEach(uid => {
+                cumulativeCounts[uid] += weeklyCountsMap[i][uid] || 0;
+              });
+            }
+
             weekly.push({
               weekNumber: w,
               weekLabel,
-              data: { ...weeklyCountsMap[w] },
+              data: cumulativeCounts,
             });
           } else {
             // calcola posizioni cumulative
@@ -1321,7 +1333,7 @@ export default function GroupDetailPage() {
 
               <p className="text-[11px] text-slate-400">
                 {chartMode === 'pizzas'
-                  ? 'Numero di pizze registrate per ogni settimana'
+                  ? 'Numero totale di pizze registrate (cumulativo) fino a quella settimana'
                   : 'Posizione in classifica basata sul totale cumulativo fino a quella settimana'}
               </p>
 
