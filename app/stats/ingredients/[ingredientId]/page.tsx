@@ -519,7 +519,7 @@ export default function IngredientProfilePage() {
                         <p className="text-[11px] text-slate-400">
                             Usato in{' '}
                             <span className="font-semibold">
-                                {totalPizzas} pizza{totalPizzas === 1 ? '' : 'e'}
+                                {totalPizzas} pizz{totalPizzas === 1 ? 'a' : 'e'}
                             </span>{' '}
                             totali.
                         </p>
@@ -688,7 +688,7 @@ export default function IngredientProfilePage() {
                                         </Link>
                                     </div>
                                     <span className="text-slate-300">
-                                        {ing.count} pizza{ing.count === 1 ? '' : 'e'}
+                                        {ing.count} pizz{ing.count === 1 ? 'a' : 'e'}
                                     </span>
                                 </li>
                             ))}
