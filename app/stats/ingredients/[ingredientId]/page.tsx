@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 import { AppHeader } from '@/components/AppHeader';
+import { getIngredientEmoji } from '@/lib/ingredientEmojis';
 
 type Ingredient = {
     id: number;
@@ -41,6 +42,22 @@ type OriginStat = {
     count: number;
 };
 
+type WeekdayStat = {
+    weekday: number; // 0=domenica, 1=lunedì, ..., 6=sabato
+    count: number;
+};
+
+type Badge = {
+    label: string;
+    tooltip: string;
+    color: 'amber' | 'emerald' | 'blue' | 'purple';
+};
+
+const weekdayLabel = (wd: number): string => {
+    const labels = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+    return labels[wd] ?? '?';
+};
+
 const originLabel = (o: string | null) => {
     switch (o) {
         case 'takeaway':
@@ -60,64 +77,6 @@ const originLabel = (o: string | null) => {
     }
 };
 
-const INGREDIENT_EMOJI_MAP: Record<string, string> = {
-    'cipolla': '🧅',
-    'cipolle': '🧅',
-    'salame': '🍖',
-    'salame piccante': '🌶️',
-    'salamino piccante': '🌶️',
-    'salsiccia': '🥩',
-    'wurstel': '🌭',
-    'wurstel di pollo': '🌭',
-    'prosciutto': '🥓',
-    'prosciutto cotto': '🥓',
-    'prosciutto crudo': '🥓',
-    'speck': '🥓',
-
-    'funghi': '🍄',
-    'carciofi': '🫒',
-    'carciofo': '🫒',
-    'zucchine': '🥒',
-    'zucchina': '🥒',
-    'melanzane': '🍆',
-    'melanzana': '🍆',
-    'peperoni': '🫑',
-    'peperone': '🫑',
-    'rucola': '🥬',
-    'insalata': '🥬',
-    'basilico': '🌿',
-
-    'tonno': '🐟',
-    'acciughe': '🐟',
-    'acciuga': '🐟',
-    'gamberi': '🦐',
-
-    'olive': '🫒',
-    'olive nere': '🫒',
-    'olive verdi': '🫒',
-    'mais': '🌽',
-    'ananas': '🍍',
-    'gorgonzola': '🧀',
-    'mozzarella di bufala': '🧀',
-    'bufala': '🧀',
-    'patatine fritte': '🍟',
-    'patate fritte': '🍟',
-    'patate': '🥔',
-    'patate al forno': '🥔',
-    'patate arrosto': '🥔',
-    'patate lesse': '🥔',
-};
-
-function getIngredientEmoji(name?: string | null): string {
-    if (!name) return '🍕';
-    let n = name.toLowerCase().trim();
-    n = n
-        .normalize('NFD')
-        .replace(/\p{Diacritic}/gu, '');
-    return INGREDIENT_EMOJI_MAP[n] ?? '🍕';
-}
-
-
 export default function IngredientProfilePage() {
     const params = useParams();
     const router = useRouter();
@@ -132,6 +91,8 @@ export default function IngredientProfilePage() {
         {}
     );
     const [originStats, setOriginStats] = useState<OriginStat[]>([]);
+    const [weekdayStats, setWeekdayStats] = useState<WeekdayStat[]>([]);
+    const [badges, setBadges] = useState<Badge[]>([]);
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -323,6 +284,111 @@ export default function IngredientProfilePage() {
                     .sort((a, b) => b.count - a.count);
 
                 setOriginStats(originStatsList);
+
+                // 7) Distribuzione per giorno della settimana
+                const weekdayCounts: Record<number, number> = {
+                    0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0
+                };
+                pizzaList.forEach(p => {
+                    if (!p.eaten_at) return;
+                    const date = new Date(p.eaten_at);
+                    const wd = date.getDay(); // 0=domenica, 6=sabato
+                    weekdayCounts[wd] = (weekdayCounts[wd] || 0) + 1;
+                });
+                const weekdayStatsList: WeekdayStat[] = Object.entries(weekdayCounts)
+                    .map(([wd, count]) => ({ weekday: Number(wd), count }))
+                    .sort((a, b) => a.weekday - b.weekday);
+
+                setWeekdayStats(weekdayStatsList);
+
+                // 8) Calcola badge / achievements
+                const badgesList: Badge[] = [];
+
+                // Badge: Posizione globale all-time
+                const { data: allIngredients, error: allError } = await supabase
+                    .from('pizza_ingredients')
+                    .select('ingredient_id');
+
+                if (!allError && allIngredients) {
+                    const ingredientCounts: Record<number, number> = {};
+                    allIngredients.forEach(row => {
+                        const ingId = row.ingredient_id as number;
+                        ingredientCounts[ingId] = (ingredientCounts[ingId] || 0) + 1;
+                    });
+
+                    const sorted = Object.entries(ingredientCounts)
+                        .map(([id, count]) => ({ id: Number(id), count }))
+                        .sort((a, b) => b.count - a.count);
+
+                    const myPosition = sorted.findIndex(x => x.id === ingredientIdNum);
+                    if (myPosition !== -1) {
+                        const pos = myPosition + 1;
+                        badgesList.push({
+                            label: `#${pos} più usato`,
+                            tooltip: `Questo ingrediente è al ${pos}° posto tra i più utilizzati di sempre`,
+                            color: pos <= 3 ? 'amber' : pos <= 10 ? 'emerald' : 'blue',
+                        });
+                    }
+                }
+
+                // Badge: Top del mese corrente
+                const now = new Date();
+                const currentYear = now.getFullYear();
+                const currentMonth = now.getMonth() + 1;
+                const monthStart = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+                const monthEnd = new Date(currentYear, currentMonth, 0);
+                const monthEndStr = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(monthEnd.getDate()).padStart(2, '0')}`;
+
+                const { data: monthPizzas, error: monthError } = await supabase
+                    .from('pizzas')
+                    .select('id')
+                    .gte('eaten_at', monthStart)
+                    .lte('eaten_at', monthEndStr);
+
+                if (!monthError && monthPizzas) {
+                    const monthPizzaIds = monthPizzas.map(p => p.id as number);
+                    if (monthPizzaIds.length > 0) {
+                        const { data: monthIngredients, error: miError } = await supabase
+                            .from('pizza_ingredients')
+                            .select('ingredient_id')
+                            .in('pizza_id', monthPizzaIds);
+
+                        if (!miError && monthIngredients) {
+                            const monthCounts: Record<number, number> = {};
+                            monthIngredients.forEach(row => {
+                                const ingId = row.ingredient_id as number;
+                                monthCounts[ingId] = (monthCounts[ingId] || 0) + 1;
+                            });
+
+                            const sortedMonth = Object.entries(monthCounts)
+                                .map(([id, count]) => ({ id: Number(id), count }))
+                                .sort((a, b) => b.count - a.count);
+
+                            const monthPos = sortedMonth.findIndex(x => x.id === ingredientIdNum);
+                            if (monthPos !== -1) {
+                                const pos = monthPos + 1;
+                                const monthName = new Date(currentYear, currentMonth - 1).toLocaleDateString('it-IT', { month: 'long' });
+                                badgesList.push({
+                                    label: `Top ${monthName}`,
+                                    tooltip: `${pos}° ingrediente più utilizzato nel mese di ${monthName} ${currentYear}`,
+                                    color: pos <= 3 ? 'purple' : 'blue',
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // Badge: Più usato in un giorno specifico della settimana
+                const maxWeekday = weekdayStatsList.reduce((max, ws) => ws.count > max.count ? ws : max, weekdayStatsList[0]);
+                if (maxWeekday && maxWeekday.count > 0) {
+                    badgesList.push({
+                        label: `Re del ${weekdayLabel(maxWeekday.weekday)}`,
+                        tooltip: `L'ingrediente viene utilizzato più spesso di ${weekdayLabel(maxWeekday.weekday).toLowerCase()} (${maxWeekday.count} volte)`,
+                        color: 'emerald',
+                    });
+                }
+
+                setBadges(badgesList);
             } catch (err: any) {
                 console.error(err);
                 setErrorMsg(
@@ -411,6 +477,34 @@ export default function IngredientProfilePage() {
                         in tutte le pizze registrate.
                     </p>
                 </div>
+
+                {/* Badges / Achievements */}
+                {badges.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {badges.map((badge, idx) => {
+                            const colorClasses = {
+                                amber: 'bg-amber-400/10 border-amber-400/60 text-amber-200',
+                                emerald: 'bg-emerald-400/10 border-emerald-400/60 text-emerald-200',
+                                blue: 'bg-blue-400/10 border-blue-400/60 text-blue-200',
+                                purple: 'bg-purple-400/10 border-purple-400/60 text-purple-200',
+                            };
+
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`group relative px-3 py-1.5 rounded-full border text-[11px] font-semibold ${colorClasses[badge.color]} cursor-help`}
+                                    title={badge.tooltip}
+                                >
+                                    {badge.label}
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-[10px] text-slate-100 whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-10 shadow-xl">
+                                        {badge.tooltip}
+                                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-950"></div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Card: Sintesi */}
@@ -520,6 +614,44 @@ export default function IngredientProfilePage() {
                     </div>
                 </div>
 
+                {/* Card: Giorni della settimana */}
+                <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4 flex flex-col gap-2">
+                    <h2 className="text-xs font-semibold text-slate-100">
+                        Giorni della settimana
+                    </h2>
+                    <p className="text-[11px] text-slate-400 mb-2">
+                        In quali giorni viene usato più spesso questo ingrediente
+                    </p>
+                    {weekdayStats.length === 0 || weekdayStats.every(w => w.count === 0) ? (
+                        <p className="text-[11px] text-slate-400">
+                            Nessun dato disponibile.
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            {weekdayStats.map(ws => {
+                                const maxCount = Math.max(...weekdayStats.map(w => w.count));
+                                const widthPercent = maxCount > 0 ? (ws.count / maxCount) * 100 : 0;
+                                return (
+                                    <div key={ws.weekday} className="flex items-center gap-2">
+                                        <span className="text-[11px] text-slate-300 w-20 flex-shrink-0">
+                                            {weekdayLabel(ws.weekday)}
+                                        </span>
+                                        <div className="flex-1 bg-slate-900 rounded-full h-5 relative overflow-hidden">
+                                            <div
+                                                className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-300"
+                                                style={{ width: `${widthPercent}%` }}
+                                            />
+                                            <span className="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-slate-100">
+                                                {ws.count}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
                 {/* Card: Co-occorrenti */}
                 <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4 flex flex-col gap-2">
                     <h2 className="text-xs font-semibold text-slate-100">
@@ -549,7 +681,7 @@ export default function IngredientProfilePage() {
                                             {getIngredientEmoji(ing.name)}
                                         </span>
                                         <Link
-                                            href={`/ingredients/${ing.ingredientId}`}
+                                            href={`/stats/ingredients/${ing.ingredientId}`}
                                             className="text-slate-100 hover:underline"
                                         >
                                             {ing.name}
