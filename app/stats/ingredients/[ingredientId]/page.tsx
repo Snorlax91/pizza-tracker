@@ -433,7 +433,7 @@ export default function IngredientProfilePage() {
                             Voto medio delle pizze:{' '}
                             {avgRating !== null ? (
                                 <span className="font-semibold">
-                                    {avgRating.toFixed(2).replace('.', ',')} / 5
+                                    {avgRating.toFixed(2).replace('.', ',')} / 10
                                 </span>
                             ) : (
                                 <span className="text-slate-500">n.d.</span>
