@@ -9,6 +9,9 @@ import { AppHeader } from '@/components/AppHeader';
 import { getIngredientEmoji } from '@/lib/ingredientEmojis';
 import { LoginPromptModal } from '@/components/LoginPromptModal';
 import { LocalPizzaCounter } from '@/components/LocalPizzaCounter';
+import { FriendsLeaderboard } from '@/components/FriendsLeaderboard';
+import { GroupLeaderboard } from '@/components/GroupLeaderboard';
+import { MobileLeaderboardTabs } from '@/components/MobileLeaderboardTabs';
 
 type User = {
   id: string;
@@ -1325,76 +1328,14 @@ export default function Home() {
       {/* Contenuto centrale con 3 colonne su desktop */}
       <div className="flex-1 px-4 py-4 flex justify-center">
         <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-          {/* Colonna sinistra (desktop): mese scorso + settimana scorsa */}
+          {/* Colonna sinistra (desktop): Classifica Amici */}
           <div className="hidden md:flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-slate-300 mb-1">
-              In evidenza il mese scorso
-            </h2>
-            {loadingIngredientMoments ? (
-              <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 text-[11px] text-slate-400">
-                Carico i tuoi ingredienti del momento...
-              </div>
-            ) : (
-              <>
-                <IngredientStatCard
-                  title="Ingrediente del mese scorso"
-                  subtitle={prevMonthName}
-                  highlight={ingredientMoments.prevMonth}
-                />
-                <IngredientStatCard
-                  title="Ingrediente della settimana scorsa"
-                  subtitle="Settimana precedente"
-                  highlight={ingredientMoments.prevWeek}
-                />
-              </>
-            )}
+            <FriendsLeaderboard userId={user.id} />
           </div>
 
-          {/* Colonna centrale: counter + mobile ingredient panel */}
+          {/* Colonna centrale: counter */}
           <div className="flex flex-col items-center">
             <div className="w-full max-w-md">
-              {/* Versione mobile: ingredienti del momento collassabili sopra al counter */}
-              <div className="md:hidden mb-3 w-full">
-                <details className="bg-slate-800/70 border border-slate-700 rounded-2xl">
-                  <summary className="px-3 py-2 text-xs font-semibold cursor-pointer list-none flex items-center justify-between">
-                    <span>Ingredienti del momento</span>
-                    <span className="text-[10px] text-slate-400">
-                      tocca per aprire
-                    </span>
-                  </summary>
-                  <div className="px-3 pb-3 pt-1">
-                    {loadingIngredientMoments ? (
-                      <p className="text-[11px] text-slate-400">
-                        Carico i tuoi ingredienti del momento...
-                      </p>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-                        <IngredientStatCard
-                          title="Mese scorso"
-                          subtitle={prevMonthName}
-                          highlight={ingredientMoments.prevMonth}
-                        />
-                        <IngredientStatCard
-                          title="Mese corrente"
-                          subtitle={currentMonthName}
-                          highlight={ingredientMoments.currentMonth}
-                        />
-                        <IngredientStatCard
-                          title="Settimana scorsa"
-                          subtitle="Settimana precedente"
-                          highlight={ingredientMoments.prevWeek}
-                        />
-                        <IngredientStatCard
-                          title="Settimana corrente"
-                          subtitle="Questa settimana"
-                          highlight={ingredientMoments.currentWeek}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </details>
-              </div>
-
               {/* Selettore anno + counter */}
               <div className="flex items-center justify-center gap-3 mb-4">
                 <button
@@ -1494,32 +1435,59 @@ export default function Home() {
                   della pizza.
                 </p>
               )}
+
+              {/* Versione mobile: classifiche switchable sotto al counter */}
+              <div className="md:hidden mt-4 w-full">
+                <MobileLeaderboardTabs userId={user.id} />
+              </div>
+
+              {/* Sezione ingredienti del momento (sotto classifiche mobile / counter) */}
+              <div className="mt-4 w-full">
+                <details className="bg-slate-800/70 border border-slate-700 rounded-2xl">
+                  <summary className="px-4 py-3 text-sm font-semibold cursor-pointer list-none flex items-center justify-between hover:bg-slate-800 transition-colors">
+                    <span>🌶️ Ingredienti del momento</span>
+                    <span className="text-[10px] text-slate-400">
+                      clicca per espandere
+                    </span>
+                  </summary>
+                  <div className="px-4 pb-4 pt-2">
+                    {loadingIngredientMoments ? (
+                      <p className="text-xs text-slate-400">
+                        Carico i tuoi ingredienti del momento...
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <IngredientStatCard
+                          title="Mese scorso"
+                          subtitle={prevMonthName}
+                          highlight={ingredientMoments.prevMonth}
+                        />
+                        <IngredientStatCard
+                          title="Mese corrente"
+                          subtitle={currentMonthName}
+                          highlight={ingredientMoments.currentMonth}
+                        />
+                        <IngredientStatCard
+                          title="Settimana scorsa"
+                          subtitle="Settimana precedente"
+                          highlight={ingredientMoments.prevWeek}
+                        />
+                        <IngredientStatCard
+                          title="Settimana corrente"
+                          subtitle="Questa settimana"
+                          highlight={ingredientMoments.currentWeek}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </details>
+              </div>
             </div>
           </div>
 
-          {/* Colonna destra (desktop): mese corrente + settimana corrente */}
+          {/* Colonna destra (desktop): Classifica Gruppo */}
           <div className="hidden md:flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-slate-300 mb-1">
-              In evidenza questo mese
-            </h2>
-            {loadingIngredientMoments ? (
-              <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-3 text-[11px] text-slate-400">
-                Carico i tuoi ingredienti del momento...
-              </div>
-            ) : (
-              <>
-                <IngredientStatCard
-                  title="Ingrediente del mese corrente"
-                  subtitle={currentMonthName}
-                  highlight={ingredientMoments.currentMonth}
-                />
-                <IngredientStatCard
-                  title="Ingrediente della settimana corrente"
-                  subtitle="Questa settimana"
-                  highlight={ingredientMoments.currentWeek}
-                />
-              </>
-            )}
+            <GroupLeaderboard userId={user.id} />
           </div>
         </div>
       </div>
