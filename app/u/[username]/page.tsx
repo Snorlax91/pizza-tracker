@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { AppHeader } from '@/components/AppHeader';
 import Link from 'next/link';
+import { Footer } from '@/components/Footer';
 
 type Profile = {
   id: string;
@@ -935,6 +936,8 @@ export default function UserPizzasPage() {
           </div>
         </div>
       </section>
+
+      <Footer />
     </main>
   );
 }

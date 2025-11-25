@@ -12,6 +12,7 @@ import { LocalPizzaCounter } from '@/components/LocalPizzaCounter';
 import { FriendsLeaderboard } from '@/components/FriendsLeaderboard';
 import { GroupLeaderboard } from '@/components/GroupLeaderboard';
 import { MobileLeaderboardTabs } from '@/components/MobileLeaderboardTabs';
+import { Footer } from '@/components/Footer';
 
 type User = {
   id: string;
@@ -1110,6 +1111,8 @@ export default function Home() {
               </div>
             </div>
           </div>
+
+          <Footer />
         </main>
       </>
     );
@@ -1504,6 +1507,8 @@ export default function Home() {
           }}
         />
       )}
+
+      <Footer />
     </main>
     </>
   );

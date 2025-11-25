@@ -8,6 +8,7 @@ import { PizzaDetailsPanel } from '@/components/PizzaDetailsPanel';
 import { AppHeader } from '@/components/AppHeader';
 import { getIngredientEmoji } from '@/lib/ingredientEmojis';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { Footer } from '@/components/Footer';
 
 
 type User = {
@@ -313,6 +314,8 @@ function PizzasPageContent() {
                     onUpdated={handleUpdatedPizza}
                 />
             )}
+
+            <Footer />
         </main>
     );
 }

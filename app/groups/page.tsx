@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { AppHeader } from '@/components/AppHeader';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { Footer } from '@/components/Footer';
 
 type User = {
   id: string;
@@ -690,6 +691,8 @@ function GroupsPageContent() {
           </div>
         </div>
       </div>
+
+      <Footer />
     </main>
   );
 }

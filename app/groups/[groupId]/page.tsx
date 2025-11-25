@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { AppHeader } from '@/components/AppHeader';
+import { Footer } from '@/components/Footer';
 
 type User = {
   id: string;
@@ -1404,6 +1405,8 @@ export default function GroupDetailPage() {
           </div>
         )}
       </div>
+
+      <Footer />
     </main>
   );
 }
