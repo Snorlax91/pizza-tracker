@@ -326,6 +326,16 @@ function FriendsPageContent() {
           status: 'pending',
         },
       ]);
+      
+      // Aggiungi il profilo a profilesMap se presente nei searchResults
+      const profile = searchResults.find(p => p.id === otherId);
+      if (profile) {
+        setProfilesMap(prev => ({
+          ...prev,
+          [otherId]: profile,
+        }));
+      }
+      
       // rimuovi dalla lista di ricerca
       setSearchResults(prev => prev.filter(p => p.id !== otherId));
     } catch (err: any) {
