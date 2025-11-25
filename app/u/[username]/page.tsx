@@ -133,6 +133,13 @@ function getIngredientEmoji(name?: string | null): string {
   return INGREDIENT_EMOJI_MAP[n] ?? '🍕';
 }
 
+type Friendship = {
+  id: number;
+  requester_id: string;
+  addressee_id: string;
+  status: string;
+};
+
 export default function UserPizzasPage() {
   const router = useRouter();
   const params = useParams();
@@ -155,6 +162,11 @@ export default function UserPizzasPage() {
   const [loadingHighlights, setLoadingHighlights] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Friendship state
+  const [friendship, setFriendship] = useState<Friendship | null>(null);
+  const [loadingFriendship, setLoadingFriendship] = useState(false);
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
 
   const statsYear = CURRENT_YEAR;
 
@@ -211,6 +223,38 @@ export default function UserPizzasPage() {
 
     loadProfile();
   }, [usernameParam]);
+
+  // carico lo stato dell'amicizia quando ho profilo e currentUser
+  useEffect(() => {
+    const loadFriendship = async () => {
+      if (!currentUserId || !profile || currentUserId === profile.id) {
+        // Non serve caricare se non c'è utente loggato o se sto guardando me stesso
+        setFriendship(null);
+        return;
+      }
+
+      setLoadingFriendship(true);
+      try {
+        const { data, error } = await supabase
+          .from('friendships')
+          .select('id, requester_id, addressee_id, status')
+          .or(
+            `and(requester_id.eq.${currentUserId},addressee_id.eq.${profile.id}),and(requester_id.eq.${profile.id},addressee_id.eq.${currentUserId})`
+          )
+          .maybeSingle();
+
+        if (error && error.code !== 'PGRST116') throw error;
+
+        setFriendship(data as Friendship | null);
+      } catch (err: any) {
+        console.error(err);
+      } finally {
+        setLoadingFriendship(false);
+      }
+    };
+
+    loadFriendship();
+  }, [currentUserId, profile]);
 
   // carico highlight (rank + top ingrediente) per questo profilo
   useEffect(() => {
@@ -509,6 +553,53 @@ export default function UserPizzasPage() {
   const displayName =
     profile?.display_name || profile?.username || 'Utente';
 
+  // Funzione per inviare richiesta d'amicizia
+  const handleAddFriend = async () => {
+    if (!currentUserId || !profile || isMe) return;
+    
+    setFriendActionLoading(true);
+    setErrorMsg(null);
+
+    try {
+      const { error } = await supabase.from('friendships').insert({
+        requester_id: currentUserId,
+        addressee_id: profile.id,
+        status: 'pending',
+      });
+
+      if (error) throw error;
+
+      // Aggiorna stato locale
+      setFriendship({
+        id: -1,
+        requester_id: currentUserId,
+        addressee_id: profile.id,
+        status: 'pending',
+      });
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message ?? 'Errore nell\'invio della richiesta d\'amicizia.');
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+
+  // Determina lo stato dell'amicizia per mostrare il bottone corretto
+  const getFriendshipStatus = () => {
+    if (!currentUserId || isMe) return null;
+    if (!friendship) return 'none';
+    if (friendship.status === 'accepted') return 'friends';
+    if (friendship.status === 'pending' && friendship.requester_id === currentUserId) {
+      return 'pending-sent';
+    }
+    if (friendship.status === 'pending' && friendship.addressee_id === currentUserId) {
+      return 'pending-received';
+    }
+    return 'none';
+  };
+
+  const friendshipStatus = getFriendshipStatus();
+
   if (profileLoading) {
     return (
       <main className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
@@ -551,14 +642,54 @@ export default function UserPizzasPage() {
                 </p>
               )}
             </div>
-            {isMe && (
-              <Link
-                href="/"
-                className="text-[11px] px-3 py-1 rounded-full border border-slate-700 hover:bg-slate-800"
-              >
-                Vai alla tua home
-              </Link>
-            )}
+            <div className="flex items-center gap-2">
+              {isMe && (
+                <Link
+                  href="/"
+                  className="text-[11px] px-3 py-1 rounded-full border border-slate-700 hover:bg-slate-800"
+                >
+                  Vai alla tua home
+                </Link>
+              )}
+              {!isMe && currentUserId && friendshipStatus && (
+                <div>
+                  {friendshipStatus === 'none' && (
+                    <button
+                      onClick={handleAddFriend}
+                      disabled={friendActionLoading || loadingFriendship}
+                      className="text-xs px-3 py-1.5 rounded-full bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1"
+                    >
+                      {friendActionLoading ? (
+                        'Invio...'
+                      ) : (
+                        <>
+                          <span>👤</span>
+                          <span>Aggiungi amico</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {friendshipStatus === 'pending-sent' && (
+                    <div className="text-xs px-3 py-1.5 rounded-full border border-slate-600 text-slate-400 flex items-center gap-1">
+                      <span>⏳</span>
+                      <span>Richiesta inviata</span>
+                    </div>
+                  )}
+                  {friendshipStatus === 'pending-received' && (
+                    <div className="text-xs px-3 py-1.5 rounded-full border border-amber-400 text-amber-300 flex items-center gap-1">
+                      <span>📥</span>
+                      <span>Richiesta ricevuta</span>
+                    </div>
+                  )}
+                  {friendshipStatus === 'friends' && (
+                    <div className="text-xs px-3 py-1.5 rounded-full bg-green-900/40 border border-green-600 text-green-300 flex items-center gap-1">
+                      <span>✓</span>
+                      <span>Amici</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {loadingHighlights ? (
