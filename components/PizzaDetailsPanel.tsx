@@ -735,6 +735,28 @@ export function PizzaDetailsPanel({
                   </p>
                 ) : null}
 
+                {/* Ingredienti selezionati - PRIMA dei suggerimenti */}
+                {selectedIngredients.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[11px] text-slate-400 mb-1">
+                      Ingredienti di questa pizza (tocca per rimuovere):
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedIngredients.map(ing => (
+                        <button
+                          key={ing.id}
+                          type="button"
+                          onClick={() => handleToggleIngredient(ing)}
+                          className="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-200 border border-amber-400/60 flex items-center gap-1"
+                        >
+                          <span>{ing.name}</span>
+                          <span className="text-[9px] opacity-80">✕</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* SUGGERIMENTI */}
                 {(filteredUserSuggestions.length > 0 ||
                   filteredGlobalSuggestions.length > 0) && (
@@ -778,28 +800,6 @@ export function PizzaDetailsPanel({
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
-
-                {/* Ingredienti selezionati */}
-                {selectedIngredients.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-[11px] text-slate-400 mb-1">
-                      Ingredienti di questa pizza (tocca per rimuovere):
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedIngredients.map(ing => (
-                        <button
-                          key={ing.id}
-                          type="button"
-                          onClick={() => handleToggleIngredient(ing)}
-                          className="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-200 border border-amber-400/60 flex items-center gap-1"
-                        >
-                          <span>{ing.name}</span>
-                          <span className="text-[9px] opacity-80">✕</span>
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 )}
               </div>
