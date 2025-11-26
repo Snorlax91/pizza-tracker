@@ -53,6 +53,11 @@ type Badge = {
     color: 'amber' | 'emerald' | 'blue' | 'purple';
 };
 
+type SearchIngredient = {
+    id: number;
+    name: string;
+};
+
 const weekdayLabel = (wd: number): string => {
     const labels = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
     return labels[wd] ?? '?';
@@ -95,6 +100,11 @@ export default function IngredientProfilePage() {
     const [badges, setBadges] = useState<Badge[]>([]);
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+    
+    // Ricerca ingredienti
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<SearchIngredient[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
 
     // auth (per ora richiediamo login anche per vedere il profilo ingrediente)
     useEffect(() => {
@@ -403,6 +413,43 @@ export default function IngredientProfilePage() {
         loadData();
     }, [userId, ingredientIdParam]);
 
+    // Ricerca ingredienti
+    useEffect(() => {
+        const searchIngredients = async () => {
+            if (!searchQuery.trim()) {
+                setSearchResults([]);
+                return;
+            }
+
+            setIsSearching(true);
+            try {
+                const { data, error } = await supabase
+                    .from('ingredients')
+                    .select('id, name')
+                    .ilike('name', `%${searchQuery}%`)
+                    .order('name')
+                    .limit(10);
+
+                if (error) throw error;
+
+                setSearchResults(
+                    (data ?? []).map(d => ({
+                        id: d.id as number,
+                        name: d.name as string,
+                    }))
+                );
+            } catch (err) {
+                console.error('Errore ricerca ingredienti:', err);
+                setSearchResults([]);
+            } finally {
+                setIsSearching(false);
+            }
+        };
+
+        const timer = setTimeout(searchIngredients, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
     const totalPizzas = pizzas.length;
     const avgRating = useMemo(() => {
         if (pizzas.length === 0) return null;
@@ -468,14 +515,65 @@ export default function IngredientProfilePage() {
             <AppHeader />
 
             <div className="flex-1 px-4 py-4 max-w-4xl mx-auto w-full flex flex-col gap-4">
-                <div className="flex flex-col gap-1">
-                    <h1 className="text-sm font-semibold">
-                        Profilo ingrediente – {ingredient.name}
-                    </h1>
-                    <p className="text-[11px] text-slate-400">
-                        Statistiche sull&apos;utilizzo globale di questo ingrediente
-                        in tutte le pizze registrate.
-                    </p>
+                <div className="flex flex-col md:flex-row gap-3 md:gap-4 md:items-start md:justify-between">
+                    <div className="flex flex-col gap-1">
+                        <h1 className="text-sm font-semibold">
+                            Profilo ingrediente – {ingredient.name}
+                        </h1>
+                        <p className="text-[11px] text-slate-400">
+                            Statistiche sull&apos;utilizzo globale di questo ingrediente
+                            in tutte le pizze registrate.
+                        </p>
+                    </div>
+
+                    {/* Ricerca ingredienti */}
+                    <div className="relative w-full md:w-64 flex-shrink-0">
+                        <input
+                            type="text"
+                            placeholder="Cerca ingrediente..."
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-slate-800 border border-slate-700 rounded-lg text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-400/50"
+                        />
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-100"
+                            >
+                                ✕
+                            </button>
+                        )}
+
+                        {/* Risultati ricerca */}
+                        {searchQuery && (
+                            <div className="absolute top-full mt-1 w-full bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                                {isSearching ? (
+                                    <div className="px-3 py-2 text-xs text-slate-400">
+                                        Cerco...
+                                    </div>
+                                ) : searchResults.length === 0 ? (
+                                    <div className="px-3 py-2 text-xs text-slate-400">
+                                        Nessun ingrediente trovato
+                                    </div>
+                                ) : (
+                                    <ul className="py-1">
+                                        {searchResults.map(ing => (
+                                            <li key={ing.id}>
+                                                <Link
+                                                    href={`/stats/ingredients/${ing.id}`}
+                                                    className="block px-3 py-2 text-xs text-slate-100 hover:bg-slate-700 transition-colors"
+                                                    onClick={() => setSearchQuery('')}
+                                                >
+                                                    <span className="mr-2">{getIngredientEmoji(ing.name)}</span>
+                                                    {ing.name}
+                                                </Link>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Badges / Achievements */}
