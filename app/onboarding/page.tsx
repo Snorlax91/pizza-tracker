@@ -55,7 +55,8 @@ export default function OnboardingPage() {
           return;
         }
 
-        // Proponiamo valori di default
+        // Lasciamo i campi vuoti per farli scegliere all'utente
+        // Se nel db ci sono già valori (diversi dall'email), li usiamo
         const email = user.email ?? '';
         const emailPrefix = email.includes('@')
           ? email.split('@')[0]
@@ -67,9 +68,19 @@ export default function OnboardingPage() {
               user.user_metadata.name)) ||
           '';
 
-        setUsername(profile.username || emailPrefix || '');
+        // Usa i valori dal db solo se non sono l'email
+        const dbUsername = profile.username || '';
+        const dbDisplayName = profile.display_name || '';
+        
+        setUsername(
+          dbUsername && dbUsername !== email && !dbUsername.includes(email) 
+            ? dbUsername 
+            : ''
+        );
         setDisplayName(
-          profile.display_name || fullName || emailPrefix || ''
+          dbDisplayName && dbDisplayName !== email && !dbDisplayName.includes(email)
+            ? dbDisplayName
+            : fullName || ''
         );
         setPizzaVisibility(
           (profile.pizza_visibility as Visibility) || 'everyone'
