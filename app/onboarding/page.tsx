@@ -4,8 +4,6 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 
-type Visibility = 'everyone' | 'friends' | 'groups' | 'none';
-
 export default function OnboardingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -14,10 +12,6 @@ export default function OnboardingPage() {
 
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [pizzaVisibility, setPizzaVisibility] =
-    useState<Visibility>('everyone');
-  const [emailVisibility, setEmailVisibility] =
-    useState<Visibility>('friends');
 
   useEffect(() => {
     const load = async () => {
@@ -38,7 +32,7 @@ export default function OnboardingPage() {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select(
-            'id, username, display_name, needs_onboarding, pizza_visibility, email_visibility'
+            'id, username, display_name, needs_onboarding'
           )
           .eq('id', user.id)
           .single();
@@ -81,12 +75,6 @@ export default function OnboardingPage() {
           dbDisplayName && dbDisplayName !== email && !dbDisplayName.includes(email)
             ? dbDisplayName
             : fullName || ''
-        );
-        setPizzaVisibility(
-          (profile.pizza_visibility as Visibility) || 'everyone'
-        );
-        setEmailVisibility(
-          (profile.email_visibility as Visibility) || 'friends'
         );
       } catch (err: any) {
         console.error(err);
@@ -161,8 +149,6 @@ export default function OnboardingPage() {
         .update({
           username: trimmedUsername,
           display_name: trimmedDisplayName || trimmedUsername,
-          pizza_visibility: pizzaVisibility,
-          email_visibility: emailVisibility,
           needs_onboarding: false,
         })
         .eq('id', user.id);
@@ -196,7 +182,7 @@ export default function OnboardingPage() {
           Benvenuto su Pizza Tracker 🍕
         </h1>
         <p className="text-sm text-slate-300 text-center mb-6">
-          Scegli il tuo nickname e come vuoi condividere le tue pizze.
+          Scegli il tuo nickname per iniziare!
         </p>
 
         <form
@@ -237,55 +223,6 @@ export default function OnboardingPage() {
             <p className="text-[11px] text-slate-400">
               Comparirà nelle classifiche e nelle liste. Se vuoto, useremo
               il nickname.
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs text-slate-300">
-              Chi può vedere le tue pizze (lista dettagli)?
-            </label>
-            <select
-              value={pizzaVisibility}
-              onChange={e =>
-                setPizzaVisibility(e.target.value as Visibility)
-              }
-              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:ring focus:ring-slate-500"
-            >
-              <option value="everyone">Tutti</option>
-              <option value="friends">Solo amici</option>
-              <option value="groups">
-                Solo chi è con me in un gruppo
-              </option>
-              <option value="none">Nessuno (solo io)</option>
-            </select>
-            <p className="text-[11px] text-slate-400">
-              La classifica userà comunque il numero totale di pizze; qui
-              decidi chi può vedere i dettagli.
-            </p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-xs text-slate-300">
-              Chi può vedere la tua email
-            </label>
-            <select
-              value={emailVisibility}
-              onChange={e =>
-                setEmailVisibility(e.target.value as Visibility)
-              }
-              className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:ring focus:ring-slate-500"
-            >
-              <option value="everyone">Tutti</option>
-              <option value="friends">Solo amici</option>
-              <option value="groups">
-                Solo chi è con me in un gruppo
-              </option>
-              <option value="none">Nessuno</option>
-            </select>
-            <p className="text-[11px] text-slate-400">
-              Al momento mostriamo solo la tua email a te stesso nella
-              UI; useremo questa impostazione se in futuro deciderai di
-              mostrarla ad altri.
             </p>
           </div>
 
