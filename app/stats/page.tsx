@@ -600,7 +600,7 @@ export default function GlobalStatsPage() {
             topUsersByDistinct,
             topIngredientsByWeekday,
         };
-    }, [rows, pizzasPeriod, year, month, originFilter, usersWeekday, ingredientsWeekday]);
+    }, [rows, pizzasPeriod, year, month, originFilter, usersWeekday, ingredientsWeekday, showUnspecified]);
 
     const periodLabel = month === 'all'
         ? `tutto il ${year}`
