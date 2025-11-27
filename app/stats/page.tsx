@@ -27,7 +27,8 @@ type PizzaOriginFilter =
     | 'restaurant'
     | 'bakery'
     | 'bar'
-    | 'other';
+    | 'other'
+    | 'unspecified';
 
 type PizzaPeriodRow = {
     eaten_at: string | null;
@@ -79,6 +80,7 @@ export default function GlobalStatsPage() {
     const [rows, setRows] = useState<IngredientRow[]>([]);
     const [pizzasPeriod, setPizzasPeriod] = useState<PizzaPeriodRow[]>([]);
     const [originFilter, setOriginFilter] = useState<PizzaOriginFilter>('all');
+    const [showUnspecified, setShowUnspecified] = useState(false);
 
     // profili globali per dare un nome alle classifiche utenti
     const [profilesMap, setProfilesMap] = useState<Record<string, ProfileLite>>({});
@@ -363,6 +365,8 @@ export default function GlobalStatsPage() {
                     return 'Bar';
                 case 'other':
                     return 'Altro';
+                case 'unspecified':
+                    return 'Non specificato';
                 default:
                     return 'Altro';
             }
@@ -377,6 +381,7 @@ export default function GlobalStatsPage() {
             bakery: Array(7).fill(0),
             bar: Array(7).fill(0),
             other: Array(7).fill(0),
+            unspecified: Array(7).fill(0),
         };
 
         const pieCounts: Record<PizzaOriginFilter, number> = {
@@ -387,6 +392,7 @@ export default function GlobalStatsPage() {
             bakery: 0,
             bar: 0,
             other: 0,
+            unspecified: 0,
         };
 
         // Per media pizze / utente / settimana
@@ -414,17 +420,23 @@ export default function GlobalStatsPage() {
 
             const weekday = d.getDay(); // 0-6
             let origin: PizzaOriginFilter = 'other';
-            switch (row.origin) {
-                case 'takeaway':
-                case 'frozen':
-                case 'restaurant':
-                case 'bakery':
-                case 'bar':
-                case 'other':
-                    origin = row.origin;
-                    break;
-                default:
-                    origin = 'other';
+            
+            // Gestione speciale per null
+            if (row.origin === null) {
+                origin = 'unspecified';
+            } else {
+                switch (row.origin) {
+                    case 'takeaway':
+                    case 'frozen':
+                    case 'restaurant':
+                    case 'bakery':
+                    case 'bar':
+                    case 'other':
+                        origin = row.origin;
+                        break;
+                    default:
+                        origin = 'other';
+                }
             }
 
             countsByOrigin.all[weekday] += 1;
@@ -465,8 +477,9 @@ export default function GlobalStatsPage() {
         const weekdayMax = Math.max(...weekdaySeries, 0);
 
         const pieSeries = (
-            ['takeaway', 'frozen', 'restaurant', 'bakery', 'bar', 'other'] as PizzaOriginFilter[]
+            ['takeaway', 'frozen', 'restaurant', 'bakery', 'bar', 'other', 'unspecified'] as PizzaOriginFilter[]
         )
+            .filter(key => showUnspecified || key !== 'unspecified')
             .map(key => ({
                 key,
                 label: originLabel(key),
@@ -672,6 +685,7 @@ export default function GlobalStatsPage() {
                             <option value="bakery">Panificio</option>
                             <option value="bar">Bar</option>
                             <option value="other">Altro</option>
+                            <option value="unspecified">Non specificato</option>
                         </select>
                     </div>
                 </div>
@@ -1197,6 +1211,17 @@ export default function GlobalStatsPage() {
                                         <h3 className="text-sm font-semibold">
                                             Distribuzione per provenienza
                                         </h3>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={showUnspecified}
+                                                onChange={e => setShowUnspecified(e.target.checked)}
+                                                className="w-3 h-3 rounded border-slate-600 bg-slate-950"
+                                            />
+                                            <span>Mostra "Non specificato"</span>
+                                        </label>
                                     </div>
                                     {pieSeries.length === 0 ? (
                                         <p className="text-xs text-slate-400">
