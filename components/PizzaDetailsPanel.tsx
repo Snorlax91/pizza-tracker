@@ -83,6 +83,7 @@ export function PizzaDetailsPanel({
   const [userSuggestions, setUserSuggestions] = useState<Ingredient[]>([]);
   const [globalSuggestions, setGlobalSuggestions] = useState<Ingredient[]>([]);
   const [origin, setOrigin] = useState<PizzaOrigin>('');
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // Carica dettagli pizza + ingredienti selezionati + suggerimenti
   useEffect(() => {
@@ -354,16 +355,33 @@ export function PizzaDetailsPanel({
     if (!file) return;
 
     setErrorMsg(null);
+    setUploadProgress(0);
 
     try {
       const ext = file.name.split('.').pop();
       const filePath = `${userId}/${pizzaId}-${Date.now()}.${ext}`;
 
+      // Simuliamo il progresso in base alla dimensione del file
+      const fileSize = file.size;
+      const estimatedTime = Math.max(2000, Math.min(fileSize / 500, 8000)); // tra 2 e 8 secondi
+      
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev === null) return null;
+          if (prev >= 90) return 90; // fermiamoci al 90% finché non finisce davvero
+          return prev + 10;
+        });
+      }, estimatedTime / 9);
+
       const { error: uploadError } = await supabase.storage
         .from('pizza-photos')
         .upload(filePath, file);
 
+      clearInterval(progressInterval);
+
       if (uploadError) throw uploadError;
+
+      setUploadProgress(95);
 
       const {
         data: { publicUrl },
@@ -376,11 +394,14 @@ export function PizzaDetailsPanel({
 
       if (updateError) throw updateError;
 
+      setUploadProgress(100);
       setPhotoUrl(publicUrl);
       if (onUpdated) onUpdated();
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message ?? 'Errore nel caricamento della foto.');
+    } finally {
+      setTimeout(() => setUploadProgress(null), 500);
     }
   };
 
@@ -477,7 +498,23 @@ export function PizzaDetailsPanel({
                   Foto della pizza (opzionale)
                 </label>
 
-                {!photoUrl && (
+                {/* Barra di progresso upload */}
+                {uploadProgress !== null && (
+                  <div className="mb-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-300">
+                      <span>Caricamento in corso...</span>
+                      <span className="font-semibold">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {!photoUrl && uploadProgress === null && (
                   <label
                     className="mt-1 flex flex-col items-center justify-center gap-2 w-full py-5 rounded-xl border border-slate-700 bg-slate-800/50 text-slate-300 cursor-pointer hover:bg-slate-800 transition"
                   >
@@ -516,6 +553,24 @@ export function PizzaDetailsPanel({
 
                 {photoUrl && (
                   <div className="mt-2 relative">
+                    {/* Barra di progresso durante il cambio foto */}
+                    {uploadProgress !== null && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm rounded-xl">
+                        <div className="w-4/5 space-y-2">
+                          <div className="flex items-center justify-between text-xs text-slate-100">
+                            <span>Caricamento...</span>
+                            <span className="font-semibold">{uploadProgress}%</span>
+                          </div>
+                          <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-amber-500 to-amber-400 transition-all duration-300 ease-out"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Immagine */}
                     <img
                       src={photoUrl}
@@ -527,7 +582,9 @@ export function PizzaDetailsPanel({
                     <div className="absolute top-2 right-2 flex gap-2">
                       {/* Cambia foto (matita) */}
                       <label
-                        className="cursor-pointer bg-slate-900/70 backdrop-blur-sm p-2 rounded-full border border-slate-700 hover:bg-slate-800 transition"
+                        className={`cursor-pointer bg-slate-900/70 backdrop-blur-sm p-2 rounded-full border border-slate-700 hover:bg-slate-800 transition ${
+                          uploadProgress !== null ? 'opacity-50 pointer-events-none' : ''
+                        }`}
                         title="Cambia foto"
                       >
                         <svg
@@ -548,6 +605,7 @@ export function PizzaDetailsPanel({
                           type="file"
                           accept="image/*"
                           onChange={handleFileChange}
+                          disabled={uploadProgress !== null}
                           className="hidden"
                         />
                       </label>
@@ -555,7 +613,10 @@ export function PizzaDetailsPanel({
                       {/* Rimuovi foto (cestino) */}
                       <button
                         onClick={handleRemovePhoto}
-                        className="bg-slate-900/70 backdrop-blur-sm p-2 rounded-full border border-red-500/70 hover:bg-red-500/20 transition"
+                        disabled={uploadProgress !== null}
+                        className={`bg-slate-900/70 backdrop-blur-sm p-2 rounded-full border border-red-500/70 hover:bg-red-500/20 transition ${
+                          uploadProgress !== null ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                         title="Rimuovi foto"
                       >
                         <svg
@@ -824,14 +885,15 @@ export function PizzaDetailsPanel({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm border border-slate-700 text-slate-200 hover:bg-slate-800"
+            disabled={uploadProgress !== null}
+            className="px-4 py-2 rounded-xl text-sm border border-slate-700 text-slate-200 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Salta per ora
           </button>
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving || loading}
+            disabled={saving || loading || uploadProgress !== null}
             className="px-4 py-2 rounded-xl text-sm bg-amber-400 text-slate-900 font-semibold hover:bg-amber-300 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {saving ? 'Salvataggio...' : 'Salva dettagli'}
